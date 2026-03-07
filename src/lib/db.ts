@@ -7,6 +7,8 @@ export async function initializeDatabase() {
       unit_number TEXT UNIQUE,
       owner_name TEXT,
       phone TEXT NOT NULL,
+      mobile2 TEXT,
+      mobile3 TEXT,
       ahmed_feedback_1 TEXT,
       ahmed_feedback_2 TEXT,
       ahmed_feedback_3 TEXT,
@@ -15,6 +17,10 @@ export async function initializeDatabase() {
       last_updated TIMESTAMP DEFAULT NOW()
     )
   `;
+
+  // Idempotent upgrades for existing tables
+  await sql`ALTER TABLE contacts ADD COLUMN IF NOT EXISTS mobile2 TEXT`;
+  await sql`ALTER TABLE contacts ADD COLUMN IF NOT EXISTS mobile3 TEXT`;
 
   await sql`
     CREATE TABLE IF NOT EXISTS messages (
@@ -38,6 +44,15 @@ export async function initializeDatabase() {
       sent_count INTEGER DEFAULT 0,
       failed_count INTEGER DEFAULT 0,
       status TEXT DEFAULT 'draft',
+      created_at TIMESTAMP DEFAULT NOW()
+    )
+  `;
+
+  await sql`
+    CREATE TABLE IF NOT EXISTS templates (
+      id SERIAL PRIMARY KEY,
+      name TEXT NOT NULL,
+      body TEXT NOT NULL,
       created_at TIMESTAMP DEFAULT NOW()
     )
   `;

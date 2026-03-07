@@ -3,30 +3,41 @@
 import { Suspense, useState, useEffect } from "react";
 import { useSearchParams } from "next/navigation";
 
+interface Template {
+  id: number;
+  name: string;
+  body: string;
+}
+
 function SendForm() {
   const searchParams = useSearchParams();
   const [phone, setPhone] = useState("");
   const [text, setText] = useState("");
   const [sending, setSending] = useState(false);
   const [result, setResult] = useState<{ success: boolean; message: string } | null>(null);
+  const [templates, setTemplates] = useState<Template[]>([]);
 
   useEffect(() => {
     const phoneParam = searchParams.get("phone");
     if (phoneParam) setPhone(phoneParam);
   }, [searchParams]);
 
+  useEffect(() => {
+    fetch("/api/templates")
+      .then((r) => r.json())
+      .then((d) => { if (d.success) setTemplates(d.templates); });
+  }, []);
+
   async function handleSend(e: React.FormEvent) {
     e.preventDefault();
     setSending(true);
     setResult(null);
-
     const res = await fetch("/api/send-message", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ phone, text }),
     });
     const data = await res.json();
-
     if (data.success) {
       setResult({ success: true, message: `Message sent! ID: ${data.messageId}` });
       setText("");
@@ -40,9 +51,7 @@ function SendForm() {
     <>
       <form onSubmit={handleSend} className="bg-white rounded-xl border p-6 space-y-4">
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
-            Phone Number
-          </label>
+          <label className="block text-sm font-medium text-gray-700 mb-1">Phone Number</label>
           <input
             type="text"
             value={phone}
@@ -51,17 +60,15 @@ function SendForm() {
             className="w-full px-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
             required
           />
-          <p className="text-xs text-gray-400 mt-1">Include country code (e.g., +971...)</p>
+          <p className="text-xs text-gray-400 mt-1">Include country code (e.g. +971...)</p>
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
-            Message
-          </label>
+          <label className="block text-sm font-medium text-gray-700 mb-1">Message</label>
           <textarea
             value={text}
             onChange={(e) => setText(e.target.value)}
-            placeholder="Type your message here..."
+            placeholder="Type your message..."
             rows={5}
             className="w-full px-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-500 resize-none"
             required
@@ -83,25 +90,29 @@ function SendForm() {
         </div>
       )}
 
+      {/* Templates */}
       <div className="mt-6 bg-white rounded-xl border p-6">
-        <h2 className="text-lg font-semibold mb-3">Message Templates</h2>
-        <div className="space-y-2">
-          {[
-            { label: "Greeting", text: "Hi! I'm Ahmed from Mumtaz Properties. I wanted to reach out about your property. Let me know how I can help!" },
-            { label: "Follow-up", text: "Hi! Thanks for your interest. I have some great updates to share. Are you available for a quick call this week?" },
-            { label: "Viewing", text: "Hi! Just confirming our viewing appointment. Looking forward to it!" },
-          ].map((tpl) => (
-            <button
-              key={tpl.label}
-              type="button"
-              onClick={() => setText(tpl.text)}
-              className="block w-full text-left px-3 py-2 text-sm bg-gray-50 hover:bg-gray-100 rounded-lg transition-colors"
-            >
-              <span className="font-medium">{tpl.label}:</span>{" "}
-              <span className="text-gray-500">{tpl.text.slice(0, 60)}...</span>
-            </button>
-          ))}
+        <div className="flex items-center justify-between mb-3">
+          <h2 className="text-lg font-semibold">Templates</h2>
+          <a href="/templates" className="text-sm text-blue-600 hover:underline">Manage →</a>
         </div>
+        {templates.length === 0 ? (
+          <p className="text-sm text-gray-400">No templates yet. <a href="/templates" className="text-blue-600 hover:underline">Create one →</a></p>
+        ) : (
+          <div className="space-y-2">
+            {templates.map((tpl) => (
+              <button
+                key={tpl.id}
+                type="button"
+                onClick={() => setText(tpl.body)}
+                className="block w-full text-left px-3 py-2 text-sm bg-gray-50 hover:bg-gray-100 rounded-lg transition-colors"
+              >
+                <span className="font-medium">{tpl.name}</span>
+                <span className="text-gray-400 ml-2">{tpl.body.slice(0, 60)}{tpl.body.length > 60 ? "…" : ""}</span>
+              </button>
+            ))}
+          </div>
+        )}
       </div>
     </>
   );
