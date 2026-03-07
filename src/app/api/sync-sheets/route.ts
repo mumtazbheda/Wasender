@@ -1,10 +1,26 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 import { sql } from "@/lib/db";
 import { fetchContactsFromSheet } from "@/lib/sheets";
 
-export async function POST() {
+export async function POST(request: NextRequest) {
   try {
-    const contacts = await fetchContactsFromSheet();
+    const session = await getServerSession(authOptions);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const accessToken = (session as any)?.accessToken as string | undefined;
+
+    if (!accessToken) {
+      return NextResponse.json(
+        { success: false, error: "Not authenticated with Google. Please click 'Connect Google Account' first." },
+        { status: 401 }
+      );
+    }
+
+    const body = await request.json().catch(() => ({}));
+    const sheetTab = body.sheetTab || "Time 1 New";
+
+    const contacts = await fetchContactsFromSheet(accessToken, sheetTab);
     let synced = 0;
 
     for (const contact of contacts) {
@@ -24,7 +40,7 @@ export async function POST() {
 
     return NextResponse.json({
       success: true,
-      message: `Synced ${synced} contacts from Google Sheets`,
+      message: `Synced ${synced} contacts from "${sheetTab}" tab`,
       count: synced,
     });
   } catch (error) {

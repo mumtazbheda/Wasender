@@ -1,16 +1,4 @@
-import { GoogleSpreadsheet } from "google-spreadsheet";
-import { JWT } from "google-auth-library";
-
-function getCredentials() {
-  const email = process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL;
-  const privateKey = process.env.GOOGLE_PRIVATE_KEY?.replace(/\\n/g, "\n");
-  if (!email || !privateKey) {
-    throw new Error(
-      "GOOGLE_SERVICE_ACCOUNT_EMAIL and GOOGLE_PRIVATE_KEY environment variables are required"
-    );
-  }
-  return { email, privateKey };
-}
+import { google } from "googleapis";
 
 export interface SheetContact {
   unitNumber: string;
@@ -21,39 +9,66 @@ export interface SheetContact {
   ahmedFeedback3: string;
 }
 
-export async function fetchContactsFromSheet(): Promise<SheetContact[]> {
-  const { email, privateKey } = getCredentials();
+function getSheetsClient(accessToken: string) {
+  const auth = new google.auth.OAuth2();
+  auth.setCredentials({ access_token: accessToken });
+  return google.sheets({ version: "v4", auth });
+}
+
+export async function fetchSheetTabs(accessToken: string): Promise<string[]> {
   const spreadsheetId = process.env.GOOGLE_SHEET_ID;
   if (!spreadsheetId) throw new Error("GOOGLE_SHEET_ID is not set");
 
-  const auth = new JWT({
-    email,
-    key: privateKey,
-    scopes: ["https://www.googleapis.com/auth/spreadsheets.readonly"],
+  const sheets = getSheetsClient(accessToken);
+  const res = await sheets.spreadsheets.get({ spreadsheetId });
+  const tabs =
+    res.data.sheets?.map((s) => s.properties?.title || "").filter(Boolean) ||
+    [];
+  return tabs;
+}
+
+export async function fetchContactsFromSheet(
+  accessToken: string,
+  sheetTab: string
+): Promise<SheetContact[]> {
+  const spreadsheetId = process.env.GOOGLE_SHEET_ID;
+  if (!spreadsheetId) throw new Error("GOOGLE_SHEET_ID is not set");
+
+  const sheets = getSheetsClient(accessToken);
+  const range = `'${sheetTab}'`;
+  const res = await sheets.spreadsheets.values.get({
+    spreadsheetId,
+    range,
   });
 
-  const doc = new GoogleSpreadsheet(spreadsheetId, auth);
-  await doc.loadInfo();
+  const rows = res.data.values;
+  if (!rows || rows.length < 2) return [];
 
-  const sheetName = process.env.GOOGLE_SHEET_TAB || "Time 1 New";
-  const sheet = doc.sheetsByTitle[sheetName];
-  if (!sheet) throw new Error(`Sheet "${sheetName}" not found`);
+  // First row is headers
+  const headers = rows[0].map((h: string) => h.toString().trim().toLowerCase());
+  const getIndex = (names: string[]) =>
+    headers.findIndex((h: string) => names.includes(h));
 
-  await sheet.loadHeaderRow();
-  const rows = await sheet.getRows();
+  const unitIdx = getIndex(["unit number", "unit_number"]);
+  const nameIdx = getIndex(["owner name", "owner_name"]);
+  const phoneIdx = getIndex(["phone number", "phone"]);
+  const fb1Idx = getIndex(["ahmed feedback 1"]);
+  const fb2Idx = getIndex(["ahmed feedback 2"]);
+  const fb3Idx = getIndex(["ahmed feedback 3"]);
 
   const contacts: SheetContact[] = [];
-  for (const row of rows) {
-    const phone = row.get("Phone Number") || row.get("phone") || "";
+  for (let i = 1; i < rows.length; i++) {
+    const row = rows[i];
+    const phone = phoneIdx >= 0 ? (row[phoneIdx] || "").toString() : "";
     if (!phone) continue;
 
     contacts.push({
-      unitNumber: row.get("Unit Number") || row.get("unit_number") || "",
-      ownerName: row.get("Owner Name") || row.get("owner_name") || "",
-      phone: phone.toString().replace(/[^0-9+]/g, ""),
-      ahmedFeedback1: row.get("Ahmed Feedback 1") || "",
-      ahmedFeedback2: row.get("Ahmed Feedback 2") || "",
-      ahmedFeedback3: row.get("Ahmed Feedback 3") || "",
+      unitNumber: unitIdx >= 0 ? (row[unitIdx] || "").toString() : "",
+      ownerName: nameIdx >= 0 ? (row[nameIdx] || "").toString() : "",
+      phone: phone.replace(/[^0-9+]/g, ""),
+      ahmedFeedback1: fb1Idx >= 0 ? (row[fb1Idx] || "").toString() : "",
+      ahmedFeedback2: fb2Idx >= 0 ? (row[fb2Idx] || "").toString() : "",
+      ahmedFeedback3: fb3Idx >= 0 ? (row[fb3Idx] || "").toString() : "",
     });
   }
 
