@@ -59,12 +59,22 @@ export async function fetchContactsFromSheet(
   const getIndex = (names: string[]) =>
     headers.findIndex((h: string) => names.includes(h));
 
-  const unitIdx = getIndex(["unit number", "unit_number"]);
-  const nameIdx = getIndex(["owner name", "owner_name"]);
-  const phoneIdx = getIndex(["phone number", "phone"]);
-  const fb1Idx = getIndex(["ahmed feedback 1"]);
-  const fb2Idx = getIndex(["ahmed feedback 2"]);
-  const fb3Idx = getIndex(["ahmed feedback 3"]);
+  let unitIdx = getIndex(["unit number", "unit_number", "unit", "unit no", "unit#"]);
+  let nameIdx = getIndex(["owner name", "owner_name", "owner", "name"]);
+  let phoneIdx = getIndex(["phone number", "phone_number", "phone", "mobile", "contact", "whatsapp"]);
+  let fb1Idx = getIndex(["ahmed feedback 1", "ahmed_feedback_1"]);
+  let fb2Idx = getIndex(["ahmed feedback 2", "ahmed_feedback_2"]);
+  let fb3Idx = getIndex(["ahmed feedback 3", "ahmed_feedback_3"]);
+
+  // Fallback: if phone column not found by header, use fixed positions (A=unit, B=name, C=phone, AV=fb1, AW=fb2, AX=fb3)
+  if (phoneIdx < 0) {
+    unitIdx = 0;  // Column A
+    nameIdx = 1;  // Column B
+    phoneIdx = 2; // Column C
+    fb1Idx = 47;  // Column AV
+    fb2Idx = 48;  // Column AW
+    fb3Idx = 49;  // Column AX
+  }
 
   const contacts: SheetContact[] = [];
   for (let i = 1; i < rows.length; i++) {
@@ -108,12 +118,22 @@ export async function fetchSheetRows(
   const getIndex = (names: string[]) =>
     headersLower.findIndex((h: string) => names.includes(h));
 
-  const unitIdx = getIndex(["unit number", "unit_number"]);
-  const nameIdx = getIndex(["owner name", "owner_name"]);
-  const phoneIdx = getIndex(["phone number", "phone"]);
-  const fb1Idx = getIndex(["ahmed feedback 1"]);
-  const fb2Idx = getIndex(["ahmed feedback 2"]);
-  const fb3Idx = getIndex(["ahmed feedback 3"]);
+  let unitIdx = getIndex(["unit number", "unit_number", "unit", "unit no", "unit#"]);
+  let nameIdx = getIndex(["owner name", "owner_name", "owner", "name"]);
+  let phoneIdx = getIndex(["phone number", "phone_number", "phone", "mobile", "contact", "whatsapp"]);
+  let fb1Idx = getIndex(["ahmed feedback 1", "ahmed_feedback_1"]);
+  let fb2Idx = getIndex(["ahmed feedback 2", "ahmed_feedback_2"]);
+  let fb3Idx = getIndex(["ahmed feedback 3", "ahmed_feedback_3"]);
+
+  // Fallback: if phone column not found by header, use fixed positions (A=unit, B=name, C=phone, AV=fb1, AW=fb2, AX=fb3)
+  if (phoneIdx < 0) {
+    unitIdx = 0;  // Column A
+    nameIdx = 1;  // Column B
+    phoneIdx = 2; // Column C
+    fb1Idx = 47;  // Column AV
+    fb2Idx = 48;  // Column AW
+    fb3Idx = 49;  // Column AX
+  }
 
   const rows: SheetRow[] = [];
   for (let i = 1; i < rawRows.length; i++) {
