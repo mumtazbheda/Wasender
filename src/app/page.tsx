@@ -21,10 +21,25 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true);
 
   async function setupDb() {
-    const res = await fetch("/api/setup-db", { method: "POST" });
-    const data = await res.json();
-    setDbReady(data.success);
-    return data.success;
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 5000); // 5 second timeout
+      
+      const res = await fetch("/api/setup-db", { 
+        method: "POST",
+        signal: controller.signal 
+      });
+      clearTimeout(timeoutId);
+      
+      const data = await res.json();
+      setDbReady(data.success);
+      return data.success;
+    } catch (error) {
+      // If setup fails or times out, still load the dashboard with cached data
+      console.warn("Database setup timeout or failed, loading with available data", error);
+      setDbReady(false);
+      return false;
+    }
   }
 
   async function loadStats() {
