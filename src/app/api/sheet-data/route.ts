@@ -16,13 +16,20 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    const sheetTab = request.nextUrl.searchParams.get("tab") || "Time 1";
-    const data = await fetchSheetRows(accessToken, sheetTab);
+    const sheetName = request.nextUrl.searchParams.get("sheetName");
+    if (!sheetName) {
+      return NextResponse.json(
+        { success: false, error: "Sheet name is required" },
+        { status: 400 }
+      );
+    }
+
+    const data = await fetchSheetRows(accessToken, sheetName);
 
     return NextResponse.json({
       success: true,
+      data: data.rows,
       headers: data.headers,
-      rows: data.rows,
       feedbackColumnIndices: data.feedbackColumnIndices,
     });
   } catch (error) {
