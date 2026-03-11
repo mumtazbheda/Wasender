@@ -130,6 +130,7 @@ export async function fetchSheetTabs(accessToken: string): Promise<string[]> {
   return res.data.sheets?.map((s) => s.properties?.title || "").filter(Boolean) || [];
 }
 
+// Main function - used by sheet-data API and contacts page
 export async function fetchContactData(
   accessToken: string,
   sheetTab: string
@@ -222,4 +223,34 @@ export async function fetchContactData(
   }
 
   return contacts;
+}
+
+// Alias for backward compatibility with sync-sheets API
+export const fetchContactsFromSheet = fetchContactData;
+
+// Update a single cell in Google Sheet
+export async function updateSheetCell(
+  accessToken: string,
+  sheetTab: string,
+  rowIndex: number,
+  columnIndex: number,
+  value: string
+): Promise<void> {
+  const spreadsheetId = process.env.GOOGLE_SHEET_ID;
+  if (!spreadsheetId) throw new Error("GOOGLE_SHEET_ID is not set");
+
+  const sheets = getSheetsClient(accessToken);
+  
+  // Convert 0-based columnIndex to A1 notation (A, B, C, etc)
+  const columnLetter = String.fromCharCode(65 + columnIndex);
+  const cellAddress = `'${sheetTab}'!${columnLetter}${rowIndex}`;
+  
+  await sheets.spreadsheets.values.update({
+    spreadsheetId,
+    range: cellAddress,
+    valueInputOption: "USER_ENTERED",
+    requestBody: {
+      values: [[value]],
+    },
+  });
 }
