@@ -16,7 +16,7 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    const sheetTab = request.nextUrl.searchParams.get("tab") || "Time 1 New";
+    const sheetTab = request.nextUrl.searchParams.get("tab") || "Time 1";
     const data = await fetchSheetRows(accessToken, sheetTab);
 
     return NextResponse.json({
