@@ -15,7 +15,7 @@ const navItems = [
 
 export default function Sidebar() {
   const pathname = usePathname();
-  const [isOpen, setIsOpen] = useState(true);
+  const [isOpen, setIsOpen] = useState(false);
 
   return (
     <>
@@ -33,20 +33,10 @@ export default function Sidebar() {
           isOpen ? "w-64" : "w-0 md:w-64"
         } overflow-hidden`}
       >
-        <div className="p-4 flex items-center justify-between">
-          <div className="flex-1">
-            <h1 className="text-xl font-bold">Wasender</h1>
-            <p className="text-gray-400 text-sm">WhatsApp Automation</p>
-          </div>
-          {/* Close button for mobile */}
-          <button
-            onClick={() => setIsOpen(false)}
-            className="md:hidden text-gray-400 hover:text-white"
-          >
-            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-            </svg>
-          </button>
+        {/* Header - No X button, only display info */}
+        <div className="p-4">
+          <h1 className="text-xl font-bold">Wasender</h1>
+          <p className="text-gray-400 text-sm">WhatsApp Automation</p>
         </div>
 
         <nav className="flex-1 space-y-1 px-2 overflow-y-auto">
@@ -75,7 +65,7 @@ export default function Sidebar() {
         </div>
       </aside>
 
-      {/* Burger Menu Button (visible on all screens) */}
+      {/* Burger Menu Button (mobile only) */}
       <button
         onClick={() => setIsOpen(!isOpen)}
         className="fixed top-4 left-4 z-40 p-2 rounded-lg bg-gray-900 text-white hover:bg-gray-800 md:hidden"

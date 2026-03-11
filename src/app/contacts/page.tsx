@@ -67,7 +67,7 @@ interface Template {
 export default function ContactsPage() {
   const { data: session, status } = useSession();
   const [selectedSheet, setSelectedSheet] = useState<string>("");
-  const [sheets, setSheets] = useState<any[]>([]);
+  const [sheets, setSheets] = useState<string[]>([]);
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [filteredContacts, setFilteredContacts] = useState<Contact[]>([]);
   const [loading, setLoading] = useState(false);
@@ -78,6 +78,7 @@ export default function ContactsPage() {
   const [selectedMobile, setSelectedMobile] = useState<string>("");
   const [templates, setTemplates] = useState<Template[]>([]);
   const [selectedTemplate, setSelectedTemplate] = useState<string>("");
+  const [sheetsLoading, setSheetsLoading] = useState(false);
 
   // Filters state
   const [filters, setFilters] = useState({
@@ -93,17 +94,28 @@ export default function ContactsPage() {
   // Load sheets
   useEffect(() => {
     const loadSheets = async () => {
+      if (status !== "authenticated") return;
+      
+      setSheetsLoading(true);
       try {
         const res = await fetch("/api/sheet-tabs");
+        if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
         const data = await res.json();
-        setSheets(data.sheets || []);
+        
+        if (data.sheets && Array.isArray(data.sheets)) {
+          setSheets(data.sheets);
+        } else if (data.error) {
+          setError(`Error loading sheets: ${data.error}`);
+        }
       } catch (err) {
         console.error("Failed to load sheets:", err);
+        setError("Failed to load sheets. Check your connection and try again.");
+      } finally {
+        setSheetsLoading(false);
       }
     };
-    if (status === "authenticated") {
-      loadSheets();
-    }
+    
+    loadSheets();
   }, [status]);
 
   // Load templates
@@ -111,6 +123,7 @@ export default function ContactsPage() {
     const loadTemplates = async () => {
       try {
         const res = await fetch("/api/templates");
+        if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
         const data = await res.json();
         setTemplates(data.templates || []);
       } catch (err) {
@@ -287,13 +300,9 @@ export default function ContactsPage() {
       return;
     }
 
-    if (mobiles.length === 1) {
-      setSelectedMobile(mobiles[0].value);
-      setShowWhatsAppModal(true);
-    } else {
-      setSelectedContact(contact);
-      setShowWhatsAppModal(true);
-    }
+    setSelectedContact(contact);
+    setShowWhatsAppModal(true);
+    setSelectedMobile("");
   };
 
   const sendWhatsAppMessage = async () => {
@@ -332,7 +341,7 @@ export default function ContactsPage() {
 
   if (status === "unauthenticated") {
     return (
-      <div className="flex flex-col items-center justify-center min-h-screen">
+      <div className="flex flex-col items-center justify-center min-h-screen md:ml-0">
         <h2 className="text-2xl font-bold mb-4">Sign In to Continue</h2>
         <button
           onClick={() => signIn("google")}
@@ -345,389 +354,392 @@ export default function ContactsPage() {
   }
 
   return (
-    <div className="w-full">
-      {/* Header */}
-      <div className="mb-6">
-        <h1 className="text-3xl font-bold mb-2">Contacts</h1>
-        <p className="text-gray-600">Load and manage contacts from Google Sheets</p>
-      </div>
-
-      {/* Controls */}
-      <div className="bg-white rounded-lg shadow p-4 mb-6 space-y-4">
-        <div className="flex flex-col md:flex-row gap-4">
-          {/* Sheet Selector */}
-          <select
-            value={selectedSheet}
-            onChange={(e) => setSelectedSheet(e.target.value)}
-            className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-          >
-            <option value="">📊 Select Sheet...</option>
-            {sheets.map((sheet) => (
-              <option key={sheet} value={sheet}>
-                {sheet}
-              </option>
-            ))}
-          </select>
-
-          {/* Load Button */}
-          <button
-            onClick={loadContacts}
-            disabled={loading || !selectedSheet}
-            className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-400"
-          >
-            {loading ? "⏳ Loading..." : "📥 Load"}
-          </button>
-
-          {/* Sync Button */}
-          <button
-            onClick={handleSync}
-            disabled={loading || !selectedSheet}
-            className="px-6 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:bg-gray-400"
-          >
-            {loading ? "⏳ Syncing..." : "🔄 Sync"}
-          </button>
+    <div className="w-full min-h-screen pt-16 md:pt-0 md:pl-0 pl-0">
+      <div className="p-4 md:p-6">
+        {/* Header */}
+        <div className="mb-6">
+          <h1 className="text-3xl font-bold mb-2">Contacts</h1>
+          <p className="text-gray-600">Load and manage contacts from Google Sheets</p>
         </div>
 
-        {/* Search */}
-        <input
-          type="text"
-          placeholder="🔍 Search by unit, owner, or phone..."
-          value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
-          className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-        />
+        {/* Controls */}
+        <div className="bg-white rounded-lg shadow p-4 mb-6 space-y-4">
+          <div className="flex flex-col md:flex-row gap-4">
+            {/* Sheet Selector */}
+            <select
+              value={selectedSheet}
+              onChange={(e) => setSelectedSheet(e.target.value)}
+              disabled={sheetsLoading || sheets.length === 0}
+              className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100"
+            >
+              <option value="">
+                {sheetsLoading ? "⏳ Loading sheets..." : sheets.length === 0 ? "❌ No sheets found" : "📊 Select Sheet..."}
+              </option>
+              {sheets.map((sheet) => (
+                <option key={sheet} value={sheet}>
+                  {sheet}
+                </option>
+              ))}
+            </select>
 
-        {/* Error */}
-        {error && (
-          <div className="p-4 bg-red-50 border border-red-200 rounded-lg text-red-700">
-            ⚠️ {error}
+            {/* Load Button */}
+            <button
+              onClick={loadContacts}
+              disabled={loading || !selectedSheet}
+              className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-400 whitespace-nowrap font-medium"
+            >
+              {loading ? "⏳ Loading..." : "📥 Load"}
+            </button>
+
+            {/* Sync Button */}
+            <button
+              onClick={handleSync}
+              disabled={loading || !selectedSheet}
+              className="px-6 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:bg-gray-400 whitespace-nowrap font-medium"
+            >
+              {loading ? "⏳ Syncing..." : "🔄 Sync"}
+            </button>
+          </div>
+
+          {/* Search */}
+          <input
+            type="text"
+            placeholder="🔍 Search by unit, owner, or phone..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+          />
+
+          {/* Error */}
+          {error && (
+            <div className="p-4 bg-red-50 border border-red-200 rounded-lg text-red-700">
+              ⚠️ {error}
+            </div>
+          )}
+        </div>
+
+        {/* Filters Section */}
+        {contacts.length > 0 && (
+          <div className="bg-white rounded-lg shadow p-4 mb-6">
+            <h3 className="font-semibold mb-4 flex items-center gap-2">
+              🎯 Filters ({filteredContacts.length} of {contacts.length})
+            </h3>
+
+            {/* Filter Grid */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+              {/* Purpose */}
+              <FilterSelect
+                label="Purpose"
+                options={getUniqueValues("purpose")}
+                selected={filters.purpose}
+                onChange={(values) => setFilters({ ...filters, purpose: values })}
+              />
+
+              {/* Rooms */}
+              <FilterSelect
+                label="Rooms"
+                options={getUniqueValues("rooms_en")}
+                selected={filters.rooms}
+                onChange={(values) => setFilters({ ...filters, rooms: values })}
+              />
+
+              {/* Listing Status */}
+              <FilterSelect
+                label="Listing Status"
+                options={getUniqueValues("listing_status")}
+                selected={filters.listing_status}
+                onChange={(values) => setFilters({ ...filters, listing_status: values })}
+              />
+
+              {/* Rental Contract Status */}
+              <FilterSelect
+                label="Rental Contract Status"
+                options={getUniqueValues("rental_contract_status")}
+                selected={filters.rental_contract_status}
+                onChange={(values) => setFilters({ ...filters, rental_contract_status: values })}
+              />
+
+              {/* Zoha Email Feedback 1 */}
+              <FilterSelect
+                label="Zoha Email Feedback 1"
+                options={getUniqueValues("zoha_email_feedback_1")}
+                selected={filters.zoha_email_feedback_1}
+                onChange={(values) => setFilters({ ...filters, zoha_email_feedback_1: values })}
+              />
+
+              {/* Zoha Email Feedback 2 */}
+              <FilterSelect
+                label="Zoha Email Feedback 2"
+                options={getUniqueValues("zoha_email_feedback_2")}
+                selected={filters.zoha_email_feedback_2}
+                onChange={(values) => setFilters({ ...filters, zoha_email_feedback_2: values })}
+              />
+
+              {/* Zoha Email Feedback 3 */}
+              <FilterSelect
+                label="Zoha Email Feedback 3"
+                options={getUniqueValues("zoha_email_feedback_3")}
+                selected={filters.zoha_email_feedback_3}
+                onChange={(values) => setFilters({ ...filters, zoha_email_feedback_3: values })}
+              />
+            </div>
+
+            {/* Clear Filters */}
+            <button
+              onClick={() =>
+                setFilters({
+                  purpose: [],
+                  rooms: [],
+                  listing_status: [],
+                  rental_contract_status: [],
+                  zoha_email_feedback_1: [],
+                  zoha_email_feedback_2: [],
+                  zoha_email_feedback_3: [],
+                })
+              }
+              className="mt-4 px-4 py-2 text-sm text-gray-600 hover:text-gray-800 border border-gray-300 rounded-lg"
+            >
+              ✕ Clear Filters
+            </button>
           </div>
         )}
-      </div>
 
-      {/* Filters Section */}
-      {contacts.length > 0 && (
-        <div className="bg-white rounded-lg shadow p-4 mb-6">
-          <h3 className="font-semibold mb-4 flex items-center gap-2">
-            🎯 Filters ({filteredContacts.length} of {contacts.length})
-          </h3>
-
-          {/* Filter Grid */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-            {/* Purpose */}
-            <FilterSelect
-              label="Purpose"
-              options={getUniqueValues("purpose")}
-              selected={filters.purpose}
-              onChange={(values) => setFilters({ ...filters, purpose: values })}
-            />
-
-            {/* Rooms */}
-            <FilterSelect
-              label="Rooms"
-              options={getUniqueValues("rooms_en")}
-              selected={filters.rooms}
-              onChange={(values) => setFilters({ ...filters, rooms: values })}
-            />
-
-            {/* Listing Status */}
-            <FilterSelect
-              label="Listing Status"
-              options={getUniqueValues("listing_status")}
-              selected={filters.listing_status}
-              onChange={(values) => setFilters({ ...filters, listing_status: values })}
-            />
-
-            {/* Rental Contract Status */}
-            <FilterSelect
-              label="Rental Contract Status"
-              options={getUniqueValues("rental_contract_status")}
-              selected={filters.rental_contract_status}
-              onChange={(values) => setFilters({ ...filters, rental_contract_status: values })}
-            />
-
-            {/* Zoha Email Feedback 1 */}
-            <FilterSelect
-              label="Zoha Email Feedback 1"
-              options={getUniqueValues("zoha_email_feedback_1")}
-              selected={filters.zoha_email_feedback_1}
-              onChange={(values) => setFilters({ ...filters, zoha_email_feedback_1: values })}
-            />
-
-            {/* Zoha Email Feedback 2 */}
-            <FilterSelect
-              label="Zoha Email Feedback 2"
-              options={getUniqueValues("zoha_email_feedback_2")}
-              selected={filters.zoha_email_feedback_2}
-              onChange={(values) => setFilters({ ...filters, zoha_email_feedback_2: values })}
-            />
-
-            {/* Zoha Email Feedback 3 */}
-            <FilterSelect
-              label="Zoha Email Feedback 3"
-              options={getUniqueValues("zoha_email_feedback_3")}
-              selected={filters.zoha_email_feedback_3}
-              onChange={(values) => setFilters({ ...filters, zoha_email_feedback_3: values })}
-            />
+        {/* Contacts Grid */}
+        {loading ? (
+          <div className="flex items-center justify-center h-64">
+            <div className="animate-spin">⏳</div>
           </div>
+        ) : filteredContacts.length === 0 ? (
+          <div className="text-center py-12 text-gray-500">
+            {contacts.length === 0 ? "📋 Select and load a sheet to get started" : "🔍 No contacts match your filters"}
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {filteredContacts.map((contact) => (
+              <div
+                key={contact.rowIndex}
+                className="bg-white rounded-lg shadow hover:shadow-lg transition-shadow cursor-pointer overflow-hidden"
+                onClick={() => setSelectedContact(contact)}
+              >
+                {/* Card Header */}
+                <div className="bg-gradient-to-r from-blue-600 to-blue-700 text-white p-4">
+                  <h3 className="font-bold text-lg">📍 {contact.unit}</h3>
+                  <p className="text-blue-100 text-sm mt-1">{contact.owner1_name}</p>
+                </div>
 
-          {/* Clear Filters */}
-          <button
-            onClick={() =>
-              setFilters({
-                purpose: [],
-                rooms: [],
-                listing_status: [],
-                rental_contract_status: [],
-                zoha_email_feedback_1: [],
-                zoha_email_feedback_2: [],
-                zoha_email_feedback_3: [],
-              })
-            }
-            className="mt-4 px-4 py-2 text-sm text-gray-600 hover:text-gray-800 border border-gray-300 rounded-lg"
-          >
-            ✕ Clear Filters
-          </button>
-        </div>
-      )}
+                {/* Card Content */}
+                <div className="p-4 space-y-3">
+                  {/* Rooms */}
+                  <div className="flex items-start gap-3">
+                    <span className="text-xl">🏠</span>
+                    <div className="flex-1">
+                      <p className="text-xs text-gray-500">Rooms</p>
+                      <p className="font-semibold">{contact.rooms_en || "N/A"}</p>
+                    </div>
+                  </div>
 
-      {/* Contacts Grid */}
-      {loading ? (
-        <div className="flex items-center justify-center h-64">
-          <div className="animate-spin">⏳</div>
-        </div>
-      ) : filteredContacts.length === 0 ? (
-        <div className="text-center py-12 text-gray-500">
-          {contacts.length === 0 ? "📋 Select and load a sheet to get started" : "🔍 No contacts match your filters"}
-        </div>
-      ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {filteredContacts.map((contact) => (
-            <div
-              key={contact.rowIndex}
-              className="bg-white rounded-lg shadow hover:shadow-lg transition-shadow cursor-pointer overflow-hidden"
-              onClick={() => setSelectedContact(contact)}
-            >
-              {/* Card Header */}
-              <div className="bg-gradient-to-r from-blue-600 to-blue-700 text-white p-4">
-                <h3 className="font-bold text-lg">📍 {contact.unit}</h3>
-                <p className="text-blue-100 text-sm mt-1">{contact.owner1_name}</p>
+                  {/* Property Size */}
+                  <div className="flex items-start gap-3">
+                    <span className="text-xl">📐</span>
+                    <div className="flex-1">
+                      <p className="text-xs text-gray-500">Property Size</p>
+                      <p className="font-semibold">{convertToSqft(contact.actual_area)}</p>
+                    </div>
+                  </div>
+
+                  {/* Balcony Size */}
+                  <div className="flex items-start gap-3">
+                    <span className="text-xl">🏞️</span>
+                    <div className="flex-1">
+                      <p className="text-xs text-gray-500">Balcony Size</p>
+                      <p className="font-semibold">{convertToSqft(contact.unit_balcony_area)}</p>
+                    </div>
+                  </div>
+
+                  {/* Days Remaining */}
+                  <div className="flex items-start gap-3">
+                    <span className="text-xl">📅</span>
+                    <div className="flex-1">
+                      <p className="text-xs text-gray-500">Contract Days</p>
+                      <p className="font-semibold text-sm">{calculateDaysRemaining(contact.rent_end_date)}</p>
+                    </div>
+                  </div>
+
+                  {/* Listing Status */}
+                  {contact.listing_status && (
+                    <div className="flex items-start gap-3">
+                      <span className="text-xl">🏷️</span>
+                      <div className="flex-1">
+                        <p className="text-xs text-gray-500">Listing Status</p>
+                        <p className="font-semibold text-sm">{contact.listing_status}</p>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Rental Contract Status */}
+                  {contact.rental_contract_status && (
+                    <div className="flex items-start gap-3">
+                      <span className="text-xl">📋</span>
+                      <div className="flex-1">
+                        <p className="text-xs text-gray-500">Rental Status</p>
+                        <p className="font-semibold text-sm">{contact.rental_contract_status}</p>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* View Details Button */}
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setSelectedContact(contact);
+                    }}
+                    className="w-full mt-4 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm font-medium"
+                  >
+                    👁️ View Details
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Detail Modal */}
+        {selectedContact && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 z-40 flex items-end md:items-center justify-center p-4">
+            <div className="bg-white rounded-lg max-h-[90vh] overflow-y-auto w-full md:max-w-2xl">
+              {/* Header */}
+              <div className="sticky top-0 bg-gradient-to-r from-blue-600 to-blue-700 text-white p-6 flex items-center justify-between">
+                <div>
+                  <h2 className="text-2xl font-bold">📍 {selectedContact.unit}</h2>
+                  <p className="text-blue-100 mt-1">{selectedContact.owner1_name}</p>
+                </div>
+                <button
+                  onClick={() => setSelectedContact(null)}
+                  className="text-white hover:bg-blue-600 p-2 rounded-lg"
+                >
+                  ✕
+                </button>
               </div>
 
-              {/* Card Content */}
-              <div className="p-4 space-y-3">
-                {/* Rooms */}
-                <div className="flex items-start gap-3">
-                  <span className="text-xl">🏠</span>
-                  <div className="flex-1">
-                    <p className="text-xs text-gray-500">Rooms</p>
-                    <p className="font-semibold">{contact.rooms_en || "N/A"}</p>
-                  </div>
-                </div>
+              {/* Content */}
+              <div className="p-6 space-y-6">
+                {/* Group 1: Property Details */}
+                <DetailGroup title="🏠 Property Details">
+                  <DetailField label="Unit" value={selectedContact.unit} />
+                  <DetailField label="Rooms" value={selectedContact.rooms_en} />
+                  <DetailField label="Property Size" value={convertToSqft(selectedContact.actual_area)} />
+                  <DetailField label="Balcony Size" value={convertToSqft(selectedContact.unit_balcony_area)} />
+                  <DetailField label="Parking Number" value={selectedContact.unit_parking_number} />
+                </DetailGroup>
 
-                {/* Property Size */}
-                <div className="flex items-start gap-3">
-                  <span className="text-xl">📐</span>
-                  <div className="flex-1">
-                    <p className="text-xs text-gray-500">Property Size</p>
-                    <p className="font-semibold">{convertToSqft(contact.actual_area)}</p>
-                  </div>
-                </div>
+                {/* Group 2: Owners Details */}
+                <DetailGroup title="👥 Owners Details">
+                  {selectedContact.owner1_name && (
+                    <>
+                      <DetailField label="Owner 1 Name" value={selectedContact.owner1_name} />
+                      <DetailField label="Owner 1 Mobile" value={selectedContact.owner1_mobile} />
+                      <DetailField label="Owner 1 Email" value={selectedContact.owner1_email} />
+                    </>
+                  )}
+                  {selectedContact.owner2_name && (
+                    <>
+                      <DetailField label="Owner 2 Name" value={selectedContact.owner2_name} />
+                      <DetailField label="Owner 2 Mobile" value={selectedContact.owner2_mobile} />
+                      <DetailField label="Owner 2 Email" value={selectedContact.owner2_email} />
+                    </>
+                  )}
+                  {selectedContact.owner3_name && (
+                    <>
+                      <DetailField label="Owner 3 Name" value={selectedContact.owner3_name} />
+                      <DetailField label="Owner 3 Mobile" value={selectedContact.owner3_mobile} />
+                      <DetailField label="Owner 3 Email" value={selectedContact.owner3_email} />
+                    </>
+                  )}
+                </DetailGroup>
 
-                {/* Balcony Size */}
-                <div className="flex items-start gap-3">
-                  <span className="text-xl">🏞️</span>
-                  <div className="flex-1">
-                    <p className="text-xs text-gray-500">Balcony Size</p>
-                    <p className="font-semibold">{convertToSqft(contact.unit_balcony_area)}</p>
-                  </div>
-                </div>
+                {/* Group 3: Sale Transaction Details */}
+                <DetailGroup title="💰 Sale Transaction Details">
+                  <DetailField label="Latest Transaction Date" value={selectedContact.latest_transaction_date} />
+                  <DetailField label="Latest Transaction Amount" value={selectedContact.latest_transaction_amount} />
+                  <DetailField label="Occupancy Status" value={selectedContact.occupancy_status} />
+                </DetailGroup>
 
-                {/* Days Remaining */}
-                <div className="flex items-start gap-3">
-                  <span className="text-xl">📅</span>
-                  <div className="flex-1">
-                    <p className="text-xs text-gray-500">Contract Days</p>
-                    <p className="font-semibold text-sm">{calculateDaysRemaining(contact.rent_end_date)}</p>
-                  </div>
-                </div>
+                {/* Group 4: Rent Transaction Details */}
+                <DetailGroup title="📅 Rent Transaction Details">
+                  <DetailField label="Rent Start Date" value={selectedContact.rent_start_date} />
+                  <DetailField label="Rent End Date" value={selectedContact.rent_end_date} />
+                  <DetailField label="Rent Duration" value={selectedContact.rent_duration} />
+                  <DetailField label="Rent Price" value={selectedContact.rent_price} />
+                  <DetailField
+                    label="Rent Contract Status"
+                    value={calculateDaysRemaining(selectedContact.rent_end_date)}
+                  />
+                  <DetailField label="Rental Status Date" value={selectedContact.rental_status_date} />
+                  <DetailField label="Rental Contract Status" value={selectedContact.rental_contract_status} />
+                  <DetailField label="Rental Months Pending/Expired" value={selectedContact.rental_months_pending_expired} />
+                </DetailGroup>
 
-                {/* Listing Status */}
-                {contact.listing_status && (
-                  <div className="flex items-start gap-3">
-                    <span className="text-xl">🏷️</span>
-                    <div className="flex-1">
-                      <p className="text-xs text-gray-500">Listing Status</p>
-                      <p className="font-semibold text-sm">{contact.listing_status}</p>
-                    </div>
-                  </div>
-                )}
+                {/* Group 5: Feedbacks */}
+                <DetailGroup title="💬 Feedbacks">
+                  <DetailField label="Zoha Feedback 1" value={selectedContact.zoha_feedback_1} wrap />
+                  <DetailField label="Zoha Feedback 2" value={selectedContact.zoha_feedback_2} wrap />
+                  <DetailField label="Zoha Feedback 3" value={selectedContact.zoha_feedback_3} wrap />
+                  <DetailField label="Ahmed Feedback 1" value={selectedContact.ahmed_feedback_1} wrap />
+                  <DetailField label="Ahmed Feedback 2" value={selectedContact.ahmed_feedback_2} wrap />
+                  <DetailField label="Ahmed Feedback 3" value={selectedContact.ahmed_feedback_3} wrap />
+                  <DetailField label="Zoha Email Feedback 1" value={selectedContact.zoha_email_feedback_1} wrap />
+                  <DetailField label="Zoha Email Feedback 2" value={selectedContact.zoha_email_feedback_2} wrap />
+                  <DetailField label="Zoha Email Feedback 3" value={selectedContact.zoha_email_feedback_3} wrap />
+                  <DetailField label="Status" value={selectedContact.status} />
+                </DetailGroup>
 
-                {/* Rental Contract Status */}
-                {contact.rental_contract_status && (
-                  <div className="flex items-start gap-3">
-                    <span className="text-xl">📋</span>
-                    <div className="flex-1">
-                      <p className="text-xs text-gray-500">Rental Status</p>
-                      <p className="font-semibold text-sm">{contact.rental_contract_status}</p>
-                    </div>
-                  </div>
-                )}
+                {/* Group 6: Property Availability Status */}
+                <DetailGroup title="🔍 Property Availability Status">
+                  <DetailField label="Furnishing" value={selectedContact.furnishing} />
+                  <DetailField label="Asking Sale Price" value={selectedContact.asking_sale_price} />
+                  <DetailField label="Asking Rent Price" value={selectedContact.asking_rent_price} />
+                  <DetailField label="Images" value={selectedContact.images} />
+                  <DetailField label="Videos" value={selectedContact.videos} />
+                  <DetailField label="Documents" value={selectedContact.documents} />
+                  <DetailField label="Purpose" value={selectedContact.purpose} />
+                  <DetailField label="Vacancy Status" value={selectedContact.vacancy_status} />
+                  <DetailField label="View" value={selectedContact.view} />
+                  <DetailField label="VAM Listing Status" value={selectedContact.vam_listing_status} />
+                  <DetailField label="Listing Link" value={selectedContact.listing_link} />
+                  <DetailField label="Owner DOB" value={selectedContact.owner_dob} />
+                  <DetailField label="CRM Listing Link" value={selectedContact.crm_listing_link} />
+                  <DetailField label="Contract A" value={selectedContact.contract_a} />
+                  <DetailField label="Rental Cheques" value={selectedContact.rental_cheques} />
+                  <DetailField label="Available From" value={selectedContact.available_from} />
+                </DetailGroup>
+              </div>
 
-                {/* View Details Button */}
+              {/* Action Buttons */}
+              <div className="sticky bottom-0 bg-gray-50 p-6 border-t border-gray-200 flex gap-3">
                 <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setSelectedContact(contact);
-                  }}
-                  className="w-full mt-4 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm font-medium"
+                  onClick={() => handleWhatsAppClick(selectedContact)}
+                  className="flex-1 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 font-medium"
                 >
-                  👁️ View Details
+                  💬 Open in WhatsApp
+                </button>
+                <button
+                  onClick={() => setSelectedContact(null)}
+                  className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-100"
+                >
+                  ✕ Close
                 </button>
               </div>
             </div>
-          ))}
-        </div>
-      )}
-
-      {/* Detail Modal */}
-      {selectedContact && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 z-40 flex items-end md:items-center justify-center p-4">
-          <div className="bg-white rounded-lg max-h-[90vh] overflow-y-auto w-full md:max-w-2xl">
-            {/* Header */}
-            <div className="sticky top-0 bg-gradient-to-r from-blue-600 to-blue-700 text-white p-6 flex items-center justify-between">
-              <div>
-                <h2 className="text-2xl font-bold">📍 {selectedContact.unit}</h2>
-                <p className="text-blue-100 mt-1">{selectedContact.owner1_name}</p>
-              </div>
-              <button
-                onClick={() => setSelectedContact(null)}
-                className="text-white hover:bg-blue-600 p-2 rounded-lg"
-              >
-                ✕
-              </button>
-            </div>
-
-            {/* Content */}
-            <div className="p-6 space-y-6">
-              {/* Group 1: Property Details */}
-              <DetailGroup title="🏠 Property Details">
-                <DetailField label="Unit" value={selectedContact.unit} />
-                <DetailField label="Rooms" value={selectedContact.rooms_en} />
-                <DetailField label="Property Size" value={convertToSqft(selectedContact.actual_area)} />
-                <DetailField label="Balcony Size" value={convertToSqft(selectedContact.unit_balcony_area)} />
-                <DetailField label="Parking Number" value={selectedContact.unit_parking_number} />
-              </DetailGroup>
-
-              {/* Group 2: Owners Details */}
-              <DetailGroup title="👥 Owners Details">
-                {selectedContact.owner1_name && (
-                  <>
-                    <DetailField label="Owner 1 Name" value={selectedContact.owner1_name} />
-                    <DetailField label="Owner 1 Mobile" value={selectedContact.owner1_mobile} />
-                    <DetailField label="Owner 1 Email" value={selectedContact.owner1_email} />
-                  </>
-                )}
-                {selectedContact.owner2_name && (
-                  <>
-                    <DetailField label="Owner 2 Name" value={selectedContact.owner2_name} />
-                    <DetailField label="Owner 2 Mobile" value={selectedContact.owner2_mobile} />
-                    <DetailField label="Owner 2 Email" value={selectedContact.owner2_email} />
-                  </>
-                )}
-                {selectedContact.owner3_name && (
-                  <>
-                    <DetailField label="Owner 3 Name" value={selectedContact.owner3_name} />
-                    <DetailField label="Owner 3 Mobile" value={selectedContact.owner3_mobile} />
-                    <DetailField label="Owner 3 Email" value={selectedContact.owner3_email} />
-                  </>
-                )}
-              </DetailGroup>
-
-              {/* Group 3: Sale Transaction Details */}
-              <DetailGroup title="💰 Sale Transaction Details">
-                <DetailField label="Latest Transaction Date" value={selectedContact.latest_transaction_date} />
-                <DetailField label="Latest Transaction Amount" value={selectedContact.latest_transaction_amount} />
-                <DetailField label="Occupancy Status" value={selectedContact.occupancy_status} />
-              </DetailGroup>
-
-              {/* Group 4: Rent Transaction Details */}
-              <DetailGroup title="📅 Rent Transaction Details">
-                <DetailField label="Rent Start Date" value={selectedContact.rent_start_date} />
-                <DetailField label="Rent End Date" value={selectedContact.rent_end_date} />
-                <DetailField label="Rent Duration" value={selectedContact.rent_duration} />
-                <DetailField label="Rent Price" value={selectedContact.rent_price} />
-                <DetailField
-                  label="Rent Contract Status"
-                  value={calculateDaysRemaining(selectedContact.rent_end_date)}
-                />
-                <DetailField label="Rental Status Date" value={selectedContact.rental_status_date} />
-                <DetailField label="Rental Contract Status" value={selectedContact.rental_contract_status} />
-                <DetailField label="Rental Months Pending/Expired" value={selectedContact.rental_months_pending_expired} />
-              </DetailGroup>
-
-              {/* Group 5: Feedbacks */}
-              <DetailGroup title="💬 Feedbacks">
-                <DetailField label="Zoha Feedback 1" value={selectedContact.zoha_feedback_1} wrap />
-                <DetailField label="Zoha Feedback 2" value={selectedContact.zoha_feedback_2} wrap />
-                <DetailField label="Zoha Feedback 3" value={selectedContact.zoha_feedback_3} wrap />
-                <DetailField label="Ahmed Feedback 1" value={selectedContact.ahmed_feedback_1} wrap />
-                <DetailField label="Ahmed Feedback 2" value={selectedContact.ahmed_feedback_2} wrap />
-                <DetailField label="Ahmed Feedback 3" value={selectedContact.ahmed_feedback_3} wrap />
-                <DetailField label="Zoha Email Feedback 1" value={selectedContact.zoha_email_feedback_1} wrap />
-                <DetailField label="Zoha Email Feedback 2" value={selectedContact.zoha_email_feedback_2} wrap />
-                <DetailField label="Zoha Email Feedback 3" value={selectedContact.zoha_email_feedback_3} wrap />
-                <DetailField label="Status" value={selectedContact.status} />
-              </DetailGroup>
-
-              {/* Group 6: Property Availability Status */}
-              <DetailGroup title="🔍 Property Availability Status">
-                <DetailField label="Furnishing" value={selectedContact.furnishing} />
-                <DetailField label="Asking Sale Price" value={selectedContact.asking_sale_price} />
-                <DetailField label="Asking Rent Price" value={selectedContact.asking_rent_price} />
-                <DetailField label="Images" value={selectedContact.images} />
-                <DetailField label="Videos" value={selectedContact.videos} />
-                <DetailField label="Documents" value={selectedContact.documents} />
-                <DetailField label="Purpose" value={selectedContact.purpose} />
-                <DetailField label="Vacancy Status" value={selectedContact.vacancy_status} />
-                <DetailField label="View" value={selectedContact.view} />
-                <DetailField label="VAM Listing Status" value={selectedContact.vam_listing_status} />
-                <DetailField label="Listing Link" value={selectedContact.listing_link} />
-                <DetailField label="Owner DOB" value={selectedContact.owner_dob} />
-                <DetailField label="CRM Listing Link" value={selectedContact.crm_listing_link} />
-                <DetailField label="Contract A" value={selectedContact.contract_a} />
-                <DetailField label="Rental Cheques" value={selectedContact.rental_cheques} />
-                <DetailField label="Available From" value={selectedContact.available_from} />
-              </DetailGroup>
-            </div>
-
-            {/* Action Buttons */}
-            <div className="sticky bottom-0 bg-gray-50 p-6 border-t border-gray-200 flex gap-3">
-              <button
-                onClick={() => handleWhatsAppClick(selectedContact)}
-                className="flex-1 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 font-medium"
-              >
-                💬 Open in WhatsApp
-              </button>
-              <button
-                onClick={() => setSelectedContact(null)}
-                className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-100"
-              >
-                ✕ Close
-              </button>
-            </div>
           </div>
-        </div>
-      )}
+        )}
 
-      {/* WhatsApp Modal */}
-      {showWhatsAppModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-lg max-w-md w-full p-6 space-y-6">
-            <h2 className="text-xl font-bold">💬 Send WhatsApp Message</h2>
+        {/* WhatsApp Modal */}
+        {showWhatsAppModal && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
+            <div className="bg-white rounded-lg max-w-md w-full p-6 space-y-6">
+              <h2 className="text-xl font-bold">💬 Send WhatsApp Message</h2>
 
-            {/* Mobile Selection - Only show if multiple mobiles */}
-            {!selectedMobile && (
+              {/* Mobile Selection */}
               <div>
                 <label className="block text-sm font-medium mb-2">Which mobile would you like to send to?</label>
                 <select
@@ -753,56 +765,56 @@ export default function ContactsPage() {
                   )}
                 </select>
               </div>
-            )}
 
-            {/* Template Selection */}
-            <div>
-              <label className="block text-sm font-medium mb-2">Which template would you like to send?</label>
-              <select
-                value={selectedTemplate}
-                onChange={(e) => setSelectedTemplate(e.target.value)}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
-              >
-                <option value="">📋 Select Template...</option>
-                {templates.map((template) => (
-                  <option key={template.id} value={template.id}>
-                    {template.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            {/* Template Preview */}
-            {selectedTemplate && (
-              <div className="bg-gray-50 p-4 rounded-lg">
-                <p className="text-xs text-gray-600 mb-2">Preview:</p>
-                <p className="text-sm whitespace-pre-wrap">{templates.find((t) => t.id === selectedTemplate)?.body}</p>
+              {/* Template Selection */}
+              <div>
+                <label className="block text-sm font-medium mb-2">Which template would you like to send?</label>
+                <select
+                  value={selectedTemplate}
+                  onChange={(e) => setSelectedTemplate(e.target.value)}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
+                >
+                  <option value="">📋 Select Template...</option>
+                  {templates.map((template) => (
+                    <option key={template.id} value={template.id}>
+                      {template.name}
+                    </option>
+                  ))}
+                </select>
               </div>
-            )}
 
-            {/* Action Buttons */}
-            <div className="flex gap-3">
-              <button
-                onClick={sendWhatsAppMessage}
-                disabled={!selectedTemplate || !selectedMobile}
-                className="flex-1 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:bg-gray-400 font-medium"
-              >
-                ✓ Send
-              </button>
-              <button
-                onClick={() => {
-                  setShowWhatsAppModal(false);
-                  setSelectedMobile("");
-                  setSelectedTemplate("");
-                }}
-                className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-100"
-              >
-                ✕ Cancel
-              </button>
+              {/* Template Preview */}
+              {selectedTemplate && (
+                <div className="bg-gray-50 p-4 rounded-lg">
+                  <p className="text-xs text-gray-600 mb-2">Preview:</p>
+                  <p className="text-sm whitespace-pre-wrap">{templates.find((t) => t.id === selectedTemplate)?.body}</p>
+                </div>
+              )}
+
+              {/* Action Buttons */}
+              <div className="flex gap-3">
+                <button
+                  onClick={sendWhatsAppMessage}
+                  disabled={!selectedTemplate || !selectedMobile}
+                  className="flex-1 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:bg-gray-400 font-medium"
+                >
+                  ✓ Send
+                </button>
+                <button
+                  onClick={() => {
+                    setShowWhatsAppModal(false);
+                    setSelectedMobile("");
+                    setSelectedTemplate("");
+                  }}
+                  className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-100"
+                >
+                  ✕ Cancel
+                </button>
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        )}
+      </div>
     </div>
   );
 }
