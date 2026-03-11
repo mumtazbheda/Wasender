@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/api/auth/[...nextauth]/route";
-import { fetchSheetRows } from "@/lib/sheets";
+import { fetchContactData } from "@/lib/sheets";
 
 export async function GET(request: NextRequest) {
   try {
@@ -24,13 +24,11 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    const data = await fetchSheetRows(accessToken, sheetName);
+    const data = await fetchContactData(accessToken, sheetName);
 
     return NextResponse.json({
       success: true,
-      data: data.rows,
-      headers: data.headers,
-      feedbackColumnIndices: data.feedbackColumnIndices,
+      data: data,
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown error";

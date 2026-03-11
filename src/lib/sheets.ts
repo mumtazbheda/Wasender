@@ -1,26 +1,58 @@
 import { google } from "googleapis";
 
-export interface SheetContact {
-  unitNumber: string;
-  ownerName: string;
-  phone: string;
-  mobile2: string;
-  mobile3: string;
-  ahmedFeedback1: string;
-  ahmedFeedback2: string;
-  ahmedFeedback3: string;
-}
-
-export interface SheetRow {
-  rowIndex: number; // 1-based row number in sheet (for updating)
-  unitNumber: string;
-  ownerName: string;
-  phone: string;
-  mobile2: string;
-  mobile3: string;
-  ahmedFeedback1: string;
-  ahmedFeedback2: string;
-  ahmedFeedback3: string;
+export interface Contact {
+  rowIndex: number;
+  unit: string;
+  owner1_name: string;
+  owner1_mobile: string;
+  owner1_email: string;
+  owner2_name: string;
+  owner2_mobile: string;
+  owner2_email: string;
+  owner3_name: string;
+  owner3_mobile: string;
+  owner3_email: string;
+  rooms_en: string;
+  actual_area: number;
+  unit_balcony_area: number;
+  unit_parking_number: string;
+  rent_end_date: string;
+  listing_status: string;
+  rental_contract_status: string;
+  purpose: string;
+  zoha_feedback_1: string;
+  zoha_feedback_2: string;
+  zoha_feedback_3: string;
+  ahmed_feedback_1: string;
+  ahmed_feedback_2: string;
+  ahmed_feedback_3: string;
+  zoha_email_feedback_1: string;
+  zoha_email_feedback_2: string;
+  zoha_email_feedback_3: string;
+  status: string;
+  latest_transaction_date: string;
+  latest_transaction_amount: string;
+  occupancy_status: string;
+  rent_start_date: string;
+  rent_duration: string;
+  rent_price: string;
+  rental_status_date: string;
+  rental_months_pending_expired: string;
+  furnishing: string;
+  asking_sale_price: string;
+  asking_rent_price: string;
+  images: string;
+  videos: string;
+  documents: string;
+  vacancy_status: string;
+  vam_listing_status: string;
+  listing_link: string;
+  owner_dob: string;
+  crm_listing_link: string;
+  contract_a: string;
+  rental_cheques: string;
+  available_from: string;
+  view: string;
 }
 
 function getSheetsClient(accessToken: string) {
@@ -31,29 +63,62 @@ function getSheetsClient(accessToken: string) {
 
 function detectColumns(headers: string[]) {
   const h = headers.map((x) => x.toString().trim().toLowerCase());
-  const find = (names: string[]) => h.findIndex((x) => names.includes(x));
+  const findByName = (names: string[]) =>
+    h.findIndex((x) => names.some((n) => x.includes(n.toLowerCase())));
 
-  let unitIdx = find(["unit number", "unit_number", "unit", "unit no", "unit#"]);
-  let nameIdx = find(["owner name", "owner_name", "owner", "name"]);
-  let m1Idx   = find(["mobile 1", "mobile1", "mobile no 1", "mobile no.", "phone number", "phone_number", "phone", "mobile", "contact"]);
-  let m2Idx   = find(["mobile 2", "mobile2", "mobile no 2", "phone 2"]);
-  let m3Idx   = find(["mobile 3", "mobile3", "mobile no 3", "phone 3"]);
-  let fb1Idx  = find(["ahmed feedback 1", "ahmed_feedback_1"]);
-  let fb2Idx  = find(["ahmed feedback 2", "ahmed_feedback_2"]);
-  let fb3Idx  = find(["ahmed feedback 3", "ahmed_feedback_3"]);
-
-  // Positional fallback if phone column not found by header name:
-  // A=unit, B=name, C=mobile1, AV(47)=fb1, AW(48)=fb2, AX(49)=fb3
-  if (m1Idx < 0) {
-    unitIdx = 0;
-    nameIdx = 1;
-    m1Idx   = 2;
-    fb1Idx  = 47;
-    fb2Idx  = 48;
-    fb3Idx  = 49;
-  }
-
-  return { unitIdx, nameIdx, m1Idx, m2Idx, m3Idx, fb1Idx, fb2Idx, fb3Idx };
+  return {
+    unit: findByName(["unit"]),
+    owner1_name: findByName(["owner", "owner 1"]),
+    owner1_mobile: findByName(["owner 1 mobile", "owner mobile", "owner 1 contact"]),
+    owner1_email: findByName(["owner 1 email"]),
+    owner2_name: findByName(["owner 2"]),
+    owner2_mobile: findByName(["owner 2 mobile", "owner 2 contact"]),
+    owner2_email: findByName(["owner 2 email"]),
+    owner3_name: findByName(["owner 3"]),
+    owner3_mobile: findByName(["owner 3 mobile", "owner 3 contact"]),
+    owner3_email: findByName(["owner 3 email"]),
+    rooms_en: findByName(["rooms", "rooms_en"]),
+    actual_area: findByName(["actual area", "actual_area", "area"]),
+    unit_balcony_area: findByName(["balcony", "balcony area"]),
+    unit_parking_number: findByName(["parking"]),
+    rent_end_date: findByName(["rent end", "end date"]),
+    listing_status: findByName(["listing status"]),
+    rental_contract_status: findByName(["rental contract", "contract status"]),
+    purpose: findByName(["purpose"]),
+    zoha_feedback_1: findByName(["zoha feedback 1", "zoha feedback"]),
+    zoha_feedback_2: findByName(["zoha feedback 2"]),
+    zoha_feedback_3: findByName(["zoha feedback 3"]),
+    ahmed_feedback_1: findByName(["ahmed feedback 1", "ahmed feedback"]),
+    ahmed_feedback_2: findByName(["ahmed feedback 2"]),
+    ahmed_feedback_3: findByName(["ahmed feedback 3"]),
+    zoha_email_feedback_1: findByName(["zoha email feedback 1", "zoha email"]),
+    zoha_email_feedback_2: findByName(["zoha email feedback 2"]),
+    zoha_email_feedback_3: findByName(["zoha email feedback 3"]),
+    status: findByName(["status"]),
+    latest_transaction_date: findByName(["latest transaction date", "transaction date"]),
+    latest_transaction_amount: findByName(["latest transaction amount", "transaction amount"]),
+    occupancy_status: findByName(["occupancy"]),
+    rent_start_date: findByName(["rent start"]),
+    rent_duration: findByName(["rent duration", "duration"]),
+    rent_price: findByName(["rent price", "price"]),
+    rental_status_date: findByName(["rental status date"]),
+    rental_months_pending_expired: findByName(["months pending", "pending"]),
+    furnishing: findByName(["furnish"]),
+    asking_sale_price: findByName(["sale price", "asking sale"]),
+    asking_rent_price: findByName(["rent price", "asking rent"]),
+    images: findByName(["images", "image"]),
+    videos: findByName(["videos", "video"]),
+    documents: findByName(["documents", "document"]),
+    vacancy_status: findByName(["vacancy"]),
+    vam_listing_status: findByName(["vam", "vam status"]),
+    listing_link: findByName(["listing link"]),
+    owner_dob: findByName(["dob", "date of birth"]),
+    crm_listing_link: findByName(["crm", "crm link"]),
+    contract_a: findByName(["contract"]),
+    rental_cheques: findByName(["cheque", "cheques"]),
+    available_from: findByName(["available"]),
+    view: findByName(["view"]),
+  };
 }
 
 export async function fetchSheetTabs(accessToken: string): Promise<string[]> {
@@ -65,51 +130,10 @@ export async function fetchSheetTabs(accessToken: string): Promise<string[]> {
   return res.data.sheets?.map((s) => s.properties?.title || "").filter(Boolean) || [];
 }
 
-export async function fetchContactsFromSheet(
+export async function fetchContactData(
   accessToken: string,
   sheetTab: string
-): Promise<SheetContact[]> {
-  const spreadsheetId = process.env.GOOGLE_SHEET_ID;
-  if (!spreadsheetId) throw new Error("GOOGLE_SHEET_ID is not set");
-
-  const sheets = getSheetsClient(accessToken);
-  const res = await sheets.spreadsheets.values.get({ spreadsheetId, range: `'${sheetTab}'` });
-
-  const rows = res.data.values;
-  if (!rows || rows.length < 2) return [];
-
-  const { unitIdx, nameIdx, m1Idx, m2Idx, m3Idx, fb1Idx, fb2Idx, fb3Idx } = detectColumns(rows[0]);
-
-  const contacts: SheetContact[] = [];
-  for (let i = 1; i < rows.length; i++) {
-    const row = rows[i];
-    const phone = m1Idx >= 0 ? (row[m1Idx] || "").toString() : "";
-    if (!phone) continue;
-
-    contacts.push({
-      unitNumber:     unitIdx >= 0 ? (row[unitIdx] || "").toString() : "",
-      ownerName:      nameIdx >= 0 ? (row[nameIdx] || "").toString() : "",
-      phone:          phone.replace(/[^0-9+]/g, ""),
-      mobile2:        m2Idx >= 0  ? (row[m2Idx]  || "").toString().replace(/[^0-9+]/g, "") : "",
-      mobile3:        m3Idx >= 0  ? (row[m3Idx]  || "").toString().replace(/[^0-9+]/g, "") : "",
-      ahmedFeedback1: fb1Idx >= 0 ? (row[fb1Idx] || "").toString() : "",
-      ahmedFeedback2: fb2Idx >= 0 ? (row[fb2Idx] || "").toString() : "",
-      ahmedFeedback3: fb3Idx >= 0 ? (row[fb3Idx] || "").toString() : "",
-    });
-  }
-
-  return contacts;
-}
-
-// Fetch raw sheet rows with indices — used by the campaigns page
-export async function fetchSheetRows(
-  accessToken: string,
-  sheetTab: string
-): Promise<{
-  headers: string[];
-  rows: SheetRow[];
-  feedbackColumnIndices: { fb1: number; fb2: number; fb3: number };
-}> {
+): Promise<Contact[]> {
   const spreadsheetId = process.env.GOOGLE_SHEET_ID;
   if (!spreadsheetId) throw new Error("GOOGLE_SHEET_ID is not set");
 
@@ -117,64 +141,85 @@ export async function fetchSheetRows(
   const res = await sheets.spreadsheets.values.get({ spreadsheetId, range: `'${sheetTab}'` });
 
   const rawRows = res.data.values;
-  if (!rawRows || rawRows.length < 2) {
-    return { headers: [], rows: [], feedbackColumnIndices: { fb1: -1, fb2: -1, fb3: -1 } };
-  }
+  if (!rawRows || rawRows.length < 2) return [];
 
   const headers = rawRows[0].map((h: string) => h.toString().trim());
-  const { unitIdx, nameIdx, m1Idx, m2Idx, m3Idx, fb1Idx, fb2Idx, fb3Idx } = detectColumns(headers);
+  const columnIndices = detectColumns(headers);
 
-  const rows: SheetRow[] = [];
+  const contacts: Contact[] = [];
   for (let i = 1; i < rawRows.length; i++) {
     const row = rawRows[i];
-    const phone = m1Idx >= 0 ? (row[m1Idx] || "").toString() : "";
-    if (!phone) continue;
 
-    rows.push({
-      rowIndex:       i + 1,
-      unitNumber:     unitIdx >= 0 ? (row[unitIdx] || "").toString() : "",
-      ownerName:      nameIdx >= 0 ? (row[nameIdx] || "").toString() : "",
-      phone:          phone.replace(/[^0-9+]/g, ""),
-      mobile2:        m2Idx >= 0  ? (row[m2Idx]  || "").toString().replace(/[^0-9+]/g, "") : "",
-      mobile3:        m3Idx >= 0  ? (row[m3Idx]  || "").toString().replace(/[^0-9+]/g, "") : "",
-      ahmedFeedback1: fb1Idx >= 0 ? (row[fb1Idx] || "").toString() : "",
-      ahmedFeedback2: fb2Idx >= 0 ? (row[fb2Idx] || "").toString() : "",
-      ahmedFeedback3: fb3Idx >= 0 ? (row[fb3Idx] || "").toString() : "",
+    // Only include rows with at least one owner mobile number
+    const owner1Mobile = columnIndices.owner1_mobile >= 0 ? (row[columnIndices.owner1_mobile] || "").toString() : "";
+    if (!owner1Mobile) continue;
+
+    const getStringValue = (idx: number): string => {
+      if (idx < 0) return "";
+      return (row[idx] || "").toString().trim();
+    };
+
+    const getNumberValue = (idx: number): number => {
+      if (idx < 0) return 0;
+      const val = (row[idx] || "").toString().trim();
+      return parseFloat(val) || 0;
+    };
+
+    contacts.push({
+      rowIndex: i + 1,
+      unit: getStringValue(columnIndices.unit),
+      owner1_name: getStringValue(columnIndices.owner1_name),
+      owner1_mobile: owner1Mobile.replace(/[^0-9+]/g, ""),
+      owner1_email: getStringValue(columnIndices.owner1_email),
+      owner2_name: getStringValue(columnIndices.owner2_name),
+      owner2_mobile: getStringValue(columnIndices.owner2_mobile).replace(/[^0-9+]/g, ""),
+      owner2_email: getStringValue(columnIndices.owner2_email),
+      owner3_name: getStringValue(columnIndices.owner3_name),
+      owner3_mobile: getStringValue(columnIndices.owner3_mobile).replace(/[^0-9+]/g, ""),
+      owner3_email: getStringValue(columnIndices.owner3_email),
+      rooms_en: getStringValue(columnIndices.rooms_en),
+      actual_area: getNumberValue(columnIndices.actual_area),
+      unit_balcony_area: getNumberValue(columnIndices.unit_balcony_area),
+      unit_parking_number: getStringValue(columnIndices.unit_parking_number),
+      rent_end_date: getStringValue(columnIndices.rent_end_date),
+      listing_status: getStringValue(columnIndices.listing_status),
+      rental_contract_status: getStringValue(columnIndices.rental_contract_status),
+      purpose: getStringValue(columnIndices.purpose),
+      zoha_feedback_1: getStringValue(columnIndices.zoha_feedback_1),
+      zoha_feedback_2: getStringValue(columnIndices.zoha_feedback_2),
+      zoha_feedback_3: getStringValue(columnIndices.zoha_feedback_3),
+      ahmed_feedback_1: getStringValue(columnIndices.ahmed_feedback_1),
+      ahmed_feedback_2: getStringValue(columnIndices.ahmed_feedback_2),
+      ahmed_feedback_3: getStringValue(columnIndices.ahmed_feedback_3),
+      zoha_email_feedback_1: getStringValue(columnIndices.zoha_email_feedback_1),
+      zoha_email_feedback_2: getStringValue(columnIndices.zoha_email_feedback_2),
+      zoha_email_feedback_3: getStringValue(columnIndices.zoha_email_feedback_3),
+      status: getStringValue(columnIndices.status),
+      latest_transaction_date: getStringValue(columnIndices.latest_transaction_date),
+      latest_transaction_amount: getStringValue(columnIndices.latest_transaction_amount),
+      occupancy_status: getStringValue(columnIndices.occupancy_status),
+      rent_start_date: getStringValue(columnIndices.rent_start_date),
+      rent_duration: getStringValue(columnIndices.rent_duration),
+      rent_price: getStringValue(columnIndices.rent_price),
+      rental_status_date: getStringValue(columnIndices.rental_status_date),
+      rental_months_pending_expired: getStringValue(columnIndices.rental_months_pending_expired),
+      furnishing: getStringValue(columnIndices.furnishing),
+      asking_sale_price: getStringValue(columnIndices.asking_sale_price),
+      asking_rent_price: getStringValue(columnIndices.asking_rent_price),
+      images: getStringValue(columnIndices.images),
+      videos: getStringValue(columnIndices.videos),
+      documents: getStringValue(columnIndices.documents),
+      vacancy_status: getStringValue(columnIndices.vacancy_status),
+      vam_listing_status: getStringValue(columnIndices.vam_listing_status),
+      listing_link: getStringValue(columnIndices.listing_link),
+      owner_dob: getStringValue(columnIndices.owner_dob),
+      crm_listing_link: getStringValue(columnIndices.crm_listing_link),
+      contract_a: getStringValue(columnIndices.contract_a),
+      rental_cheques: getStringValue(columnIndices.rental_cheques),
+      available_from: getStringValue(columnIndices.available_from),
+      view: getStringValue(columnIndices.view),
     });
   }
 
-  return { headers, rows, feedbackColumnIndices: { fb1: fb1Idx, fb2: fb2Idx, fb3: fb3Idx } };
-}
-
-// Update a specific cell in the Google Sheet
-export async function updateSheetCell(
-  accessToken: string,
-  sheetTab: string,
-  rowIndex: number,    // 1-based
-  columnIndex: number, // 0-based
-  value: string
-): Promise<void> {
-  const spreadsheetId = process.env.GOOGLE_SHEET_ID;
-  if (!spreadsheetId) throw new Error("GOOGLE_SHEET_ID is not set");
-
-  const sheets = getSheetsClient(accessToken);
-  const colLetter = columnIndexToLetter(columnIndex);
-  const range = `'${sheetTab}'!${colLetter}${rowIndex}`;
-
-  await sheets.spreadsheets.values.update({
-    spreadsheetId,
-    range,
-    valueInputOption: "RAW",
-    requestBody: { values: [[value]] },
-  });
-}
-
-function columnIndexToLetter(index: number): string {
-  let letter = "";
-  let i = index;
-  while (i >= 0) {
-    letter = String.fromCharCode((i % 26) + 65) + letter;
-    i = Math.floor(i / 26) - 1;
-  }
-  return letter;
+  return contacts;
 }
