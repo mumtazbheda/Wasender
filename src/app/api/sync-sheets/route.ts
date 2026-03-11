@@ -18,9 +18,16 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json().catch(() => ({}));
-    const sheetTab = body.sheetTab || "Time 1 New";
+    const sheetName = body.sheetName;
 
-    const contacts = await fetchContactsFromSheet(accessToken, sheetTab);
+    if (!sheetName) {
+      return NextResponse.json(
+        { success: false, error: "Sheet name is required" },
+        { status: 400 }
+      );
+    }
+
+    const contacts = await fetchContactsFromSheet(accessToken, sheetName);
     let synced = 0;
 
     for (const contact of contacts) {
@@ -42,7 +49,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({
       success: true,
-      message: `Synced ${synced} contacts from "${sheetTab}" tab`,
+      message: `Synced ${synced} contacts from "${sheetName}" tab`,
       count: synced,
     });
   } catch (error) {
