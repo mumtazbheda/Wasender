@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from 'react';
 import { signIn, useSession } from 'next-auth/react';
-import { Phone, MapPin, MessageSquare, ChevronDown, RefreshCw, X, Check, AlertCircle } from 'lucide-react';
 
 interface Contact {
   rowIndex: number;
@@ -196,7 +195,7 @@ export default function ContactsPage() {
     return (
       <div className="min-h-screen bg-gradient-to-br from-green-50 to-blue-50 flex items-center justify-center p-4">
         <div className="bg-white rounded-lg shadow-lg p-8 max-w-md w-full text-center">
-          <MessageSquare className="w-16 h-16 text-green-500 mx-auto mb-4" />
+          <div className="w-16 h-16 text-green-500 mx-auto mb-4 text-4xl">💬</div>
           <h1 className="text-2xl font-bold text-gray-800 mb-2">WhatsApp Contacts</h1>
           <p className="text-gray-600 mb-6">Connect your Google account to manage contacts and send messages</p>
           <button
@@ -223,7 +222,7 @@ export default function ContactsPage() {
                 disabled={syncing || loading}
                 className="flex items-center justify-center gap-2 bg-blue-500 hover:bg-blue-600 disabled:bg-gray-400 text-white font-semibold py-2 px-4 rounded-lg transition duration-200"
               >
-                <RefreshCw className={`w-4 h-4 ${syncing ? 'animate-spin' : ''}`} />
+                <span className={`text-lg ${syncing ? 'animate-spin inline-block' : ''}`}>🔄</span>
                 {syncing ? 'Syncing...' : 'Sync'}
               </button>
               {status === 'authenticated' && (
@@ -240,7 +239,7 @@ export default function ContactsPage() {
       <div className="max-w-7xl mx-auto px-4 py-6 sm:px-6 lg:px-8">
         {error && (
           <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-lg flex items-start gap-3">
-            <AlertCircle className="w-5 h-5 text-red-500 flex-shrink-0 mt-0.5" />
+            <span className="text-xl text-red-500 flex-shrink-0">⚠️</span>
             <div>
               <p className="text-red-700 font-semibold">Error</p>
               <p className="text-red-600 text-sm">{error}</p>
@@ -263,7 +262,7 @@ export default function ContactsPage() {
                 </option>
               ))}
             </select>
-            <ChevronDown className="absolute right-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400 pointer-events-none" />
+            <span className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 pointer-events-none">▼</span>
           </div>
         </div>
 
@@ -291,7 +290,7 @@ export default function ContactsPage() {
                   {filterKey === 'ahmedFeedback2' && 'Ahmed Feedback 2'}
                   {filterKey === 'ahmedFeedback3' && 'Ahmed Feedback 3'}
                 </span>
-                <ChevronDown className={`w-4 h-4 transition ${expandedFilters[filterKey] ? 'rotate-180' : ''}`} />
+                <span className={`text-lg transition inline-block ${expandedFilters[filterKey] ? 'rotate-180' : ''}`}>▼</span>
               </button>
 
               {expandedFilters[filterKey] && (
@@ -329,7 +328,7 @@ export default function ContactsPage() {
           </div>
         ) : filteredContacts.length === 0 ? (
           <div className="text-center py-12">
-            <MessageSquare className="w-12 h-12 text-gray-300 mx-auto mb-4" />
+            <div className="text-5xl text-gray-300 mx-auto mb-4">💬</div>
             <p className="text-gray-600 text-lg">No contacts found</p>
           </div>
         ) : (
@@ -345,7 +344,7 @@ export default function ContactsPage() {
                     <p className="text-xs text-gray-500 font-semibold uppercase">Unit</p>
                     <p className="text-lg font-bold text-gray-900">{contact.unitNumber || 'N/A'}</p>
                   </div>
-                  <MapPin className="w-5 h-5 text-green-500" />
+                  <span className="text-xl text-green-500">📍</span>
                 </div>
 
                 <p className="text-sm text-gray-600 mb-3 line-clamp-2">{contact.ownerName}</p>
@@ -357,7 +356,7 @@ export default function ContactsPage() {
                   onClick={(e) => e.stopPropagation()}
                   className="flex items-center gap-2 text-green-600 hover:text-green-700 font-semibold text-sm mb-3"
                 >
-                  <Phone className="w-4 h-4" />
+                  <span>📞</span>
                   {contact.phone}
                 </a>
 
@@ -392,9 +391,9 @@ export default function ContactsPage() {
               </div>
               <button
                 onClick={() => setSelectedContact(null)}
-                className="bg-white/20 hover:bg-white/30 rounded-full p-2 transition"
+                className="bg-white/20 hover:bg-white/30 rounded-full p-2 transition text-xl"
               >
-                <X className="w-5 h-5" />
+                ✕
               </button>
             </div>
 
@@ -482,7 +481,7 @@ export default function ContactsPage() {
                   rel="noopener noreferrer"
                   className="w-full bg-green-500 hover:bg-green-600 text-white font-semibold py-3 rounded-lg flex items-center justify-center gap-2 transition duration-200"
                 >
-                  <MessageSquare className="w-5 h-5" />
+                  <span className="text-lg">💬</span>
                   Open in WhatsApp
                 </a>
                 <button
