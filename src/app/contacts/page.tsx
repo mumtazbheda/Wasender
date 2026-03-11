@@ -1,221 +1,501 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { useSession, signIn } from 'next-auth/react';
+import { useEffect, useState } from 'react';
+import { signIn, useSession } from 'next-auth/react';
+import { Phone, MapPin, MessageSquare, ChevronDown, RefreshCw, X, Check, AlertCircle } from 'lucide-react';
 
 interface Contact {
-  id: string;
+  rowIndex: number;
+  unitNumber: string;
+  ownerName: string;
   phone: string;
-  name?: string;
-  lastMessage?: string;
-  lastMessageTime?: string;
-  messageCount: number;
-  incomingCount: number;
-  outgoingCount: number;
+  mobile2: string;
+  mobile3: string;
+  ahmedFeedback1: string;
+  ahmedFeedback2: string;
+  ahmedFeedback3: string;
 }
 
-interface Message {
-  id: string;
-  phone: string;
-  direction: 'incoming' | 'outgoing';
-  message: string;
-  timestamp: string;
+interface FilterOption {
+  [key: string]: Set<string>;
 }
 
 export default function ContactsPage() {
-  const { data: session } = useSession();
+  const { data: session, status } = useSession();
+  const [sheets, setSheets] = useState<string[]>([]);
+  const [selectedSheet, setSelectedSheet] = useState<string>('Time 1 New');
   const [contacts, setContacts] = useState<Contact[]>([]);
-  const [selectedPhone, setSelectedPhone] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [searchTerm, setSearchTerm] = useState('');
-  const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [filteredContacts, setFilteredContacts] = useState<Contact[]>([]);
+  const [selectedContact, setSelectedContact] = useState<Contact | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [syncing, setsyncing] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [filters, setFilters] = useState<Record<string, string[]>>({});
+  const [filterOptions, setFilterOptions] = useState<FilterOption>({});
+  const [expandedFilters, setExpandedFilters] = useState<Record<string, boolean>>({});
+  const [searchQuery, setSearchQuery] = useState('');
 
+  // Fetch sheet tabs
   useEffect(() => {
-    if (!session) return;
-    loadContacts();
-  }, [session]);
+    if (status === 'authenticated' && session?.user) {
+      fetchSheetTabs();
+    }
+  }, [status, session]);
 
-  async function loadContacts() {
+  const fetchSheetTabs = async () => {
     try {
       setLoading(true);
-      const res = await fetch('/api/contacts');
+      const res = await fetch('/api/sheet-tabs');
       const data = await res.json();
-      if (data.success && data.contacts) {
-        setContacts(data.contacts);
+      if (data.success) {
+        setSheets(data.tabs);
+        if (data.tabs.includes('Time 1 New')) {
+          setSelectedSheet('Time 1 New');
+          fetchContacts('Time 1 New');
+        }
       }
-    } catch (error) {
-      console.error('Failed to load contacts:', error);
+    } catch (err) {
+      setError('Failed to fetch sheets');
+      console.error(err);
     } finally {
       setLoading(false);
     }
-  }
+  };
 
-  const filteredContacts = contacts.filter((contact) => {
-    const matchesSearch =
-      contact.phone.includes(searchTerm) ||
-      contact.name?.toLowerCase().includes(searchTerm.toLowerCase());
-    
-    const matchesStatus = statusFilter === 'all' || getStatus(contact) === statusFilter;
-    
-    return matchesSearch && matchesStatus;
-  });
+  const fetchContacts = async (sheetTab: string) => {
+    try {
+      setLoading(true);
+      const res = await fetch(`/api/sheet-data?tab=${encodeURIComponent(sheetTab)}`);
+      const data = await res.json();
+      if (data.success) {
+        setContacts(data.rows);
+        buildFilterOptions(data.rows);
+        applyFilters(data.rows, filters, searchQuery);
+      } else {
+        setError(data.error || 'Failed to load contacts');
+      }
+    } catch (err) {
+      setError('Failed to fetch contacts');
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
+  };
 
-  function getStatus(contact: Contact): string {
-    if (contact.messageCount === 0) return 'no_messages';
-    if (contact.incomingCount > 0) return 'active';
-    return 'sent';
-  }
-
-  function getStatusBadge(status: string) {
-    const badges: Record<string, { bg: string; text: string; label: string }> = {
-      no_messages: { bg: 'bg-gray-100', text: 'text-gray-700', label: 'No Messages' },
-      active: { bg: 'bg-green-100', text: 'text-green-700', label: 'Active' },
-      sent: { bg: 'bg-blue-100', text: 'text-blue-700', label: 'Sent' },
+  const buildFilterOptions = (rows: Contact[]) => {
+    const options: FilterOption = {
+      ahmedFeedback1: new Set(),
+      ahmedFeedback2: new Set(),
+      ahmedFeedback3: new Set(),
     };
-    return badges[status] || badges.no_messages;
+
+    rows.forEach((row) => {
+      if (row.ahmedFeedback1) options.ahmedFeedback1.add(row.ahmedFeedback1);
+      if (row.ahmedFeedback2) options.ahmedFeedback2.add(row.ahmedFeedback2);
+      if (row.ahmedFeedback3) options.ahmedFeedback3.add(row.ahmedFeedback3);
+    });
+
+    setFilterOptions(options);
+  };
+
+  const applyFilters = (allContacts: Contact[], activeFilters: Record<string, string[]>, search: string) => {
+    let filtered = allContacts;
+
+    // Apply text search
+    if (search) {
+      const query = search.toLowerCase();
+      filtered = filtered.filter((contact) => {
+        const phoneMatch = contact.phone.includes(query) || contact.mobile2.includes(query) || contact.mobile3.includes(query);
+        const unitMatch = contact.unitNumber.toLowerCase().includes(query);
+        const nameMatch = contact.ownerName.toLowerCase().includes(query);
+        return phoneMatch || unitMatch || nameMatch;
+      });
+    }
+
+    // Apply feedback filters
+    Object.entries(activeFilters).forEach(([filterKey, filterValues]) => {
+      if (filterValues.length > 0) {
+        filtered = filtered.filter((contact) => {
+          const contactValue = contact[filterKey as keyof Contact];
+          return filterValues.includes(contactValue as string);
+        });
+      }
+    });
+
+    setFilteredContacts(filtered);
+  };
+
+  const handleFilterChange = (filterKey: string, value: string) => {
+    const newFilters = { ...filters };
+    if (!newFilters[filterKey]) newFilters[filterKey] = [];
+
+    if (newFilters[filterKey].includes(value)) {
+      newFilters[filterKey] = newFilters[filterKey].filter((v) => v !== value);
+    } else {
+      newFilters[filterKey].push(value);
+    }
+
+    setFilters(newFilters);
+    applyFilters(contacts, newFilters, searchQuery);
+  };
+
+  const handleSync = async () => {
+    try {
+      setsyncing(true);
+      const res = await fetch('/api/sync-sheets', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sheetTab: selectedSheet }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setError(null);
+        fetchContacts(selectedSheet);
+        alert(data.message);
+      } else {
+        setError(data.error || 'Sync failed');
+      }
+    } catch (err) {
+      setError('Failed to sync');
+      console.error(err);
+    } finally {
+      setsyncing(false);
+    }
+  };
+
+  const handleSheetChange = (newSheet: string) => {
+    setSelectedSheet(newSheet);
+    setFilters({});
+    setSearchQuery('');
+    fetchContacts(newSheet);
+  };
+
+  const handleSearch = (query: string) => {
+    setSearchQuery(query);
+    applyFilters(contacts, filters, query);
+  };
+
+  // WhatsApp link generator
+  const getWhatsAppLink = (phone: string) => {
+    if (!phone) return '#';
+    return `https://wa.me/${phone}`;
+  };
+
+  if (status === 'loading') {
+    return (
+      <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-green-50 to-blue-50">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-green-500 mx-auto mb-4"></div>
+          <p className="text-gray-600">Loading...</p>
+        </div>
+      </div>
+    );
   }
 
-  if (!session) {
+  if (status === 'unauthenticated') {
     return (
-      <div className="flex items-center justify-center min-h-screen">
-        <button
-          onClick={() => signIn()}
-          className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
-        >
-          Sign In to View Contacts
-        </button>
+      <div className="min-h-screen bg-gradient-to-br from-green-50 to-blue-50 flex items-center justify-center p-4">
+        <div className="bg-white rounded-lg shadow-lg p-8 max-w-md w-full text-center">
+          <MessageSquare className="w-16 h-16 text-green-500 mx-auto mb-4" />
+          <h1 className="text-2xl font-bold text-gray-800 mb-2">WhatsApp Contacts</h1>
+          <p className="text-gray-600 mb-6">Connect your Google account to manage contacts and send messages</p>
+          <button
+            onClick={() => signIn('google', { callbackUrl: '/contacts' })}
+            className="w-full bg-green-500 hover:bg-green-600 text-white font-semibold py-3 rounded-lg transition duration-200"
+          >
+            Continue with Google
+          </button>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="max-w-7xl mx-auto px-4 py-8">
-      <h1 className="text-3xl font-bold mb-8">Contacts</h1>
-
-      {/* Filters */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-        <input
-          type="text"
-          placeholder="Search by phone or name..."
-          value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
-          className="px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-        />
-        <select
-          value={statusFilter}
-          onChange={(e) => setStatusFilter(e.target.value)}
-          className="px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-        >
-          <option value="all">All Statuses</option>
-          <option value="no_messages">No Messages</option>
-          <option value="active">Active Discussion</option>
-          <option value="sent">Sent Only</option>
-        </select>
-      </div>
-
-      {/* Contacts Table - Desktop */}
-      <div className="hidden md:block bg-white rounded-lg shadow overflow-hidden">
-        <table className="w-full">
-          <thead className="bg-gray-50 border-b">
-            <tr>
-              <th className="px-6 py-3 text-left text-sm font-medium text-gray-700">Phone</th>
-              <th className="px-6 py-3 text-left text-sm font-medium text-gray-700">Name</th>
-              <th className="px-6 py-3 text-left text-sm font-medium text-gray-700">Messages</th>
-              <th className="px-6 py-3 text-left text-sm font-medium text-gray-700">Status</th>
-              <th className="px-6 py-3 text-left text-sm font-medium text-gray-700">Last Message</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y">
-            {loading ? (
-              <tr>
-                <td colSpan={5} className="px-6 py-12 text-center text-gray-500">
-                  Loading contacts...
-                </td>
-              </tr>
-            ) : filteredContacts.length === 0 ? (
-              <tr>
-                <td colSpan={5} className="px-6 py-12 text-center text-gray-500">
-                  No contacts found
-                </td>
-              </tr>
-            ) : (
-              filteredContacts.map((contact) => {
-                const status = getStatus(contact);
-                const badge = getStatusBadge(status);
-                return (
-                  <tr
-                    key={contact.id}
-                    className="hover:bg-gray-50 cursor-pointer"
-                    onClick={() => setSelectedPhone(contact.phone)}
-                  >
-                    <td className="px-6 py-4 text-sm font-medium text-gray-900">{contact.phone}</td>
-                    <td className="px-6 py-4 text-sm text-gray-700">{contact.name || '-'}</td>
-                    <td className="px-6 py-4 text-sm text-gray-700">
-                      📥 {contact.incomingCount} | 📤 {contact.outgoingCount}
-                    </td>
-                    <td className="px-6 py-4 text-sm">
-                      <span className={`px-3 py-1 rounded-full text-xs font-medium ${badge.bg} ${badge.text}`}>
-                        {badge.label}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 text-sm text-gray-600">
-                      {contact.lastMessage ? contact.lastMessage.substring(0, 30) + '...' : '-'}
-                    </td>
-                  </tr>
-                );
-              })
-            )}
-          </tbody>
-        </table>
-      </div>
-
-      {/* Contacts Cards - Mobile */}
-      <div className="md:hidden space-y-4">
-        {loading ? (
-          <div className="text-center py-8 text-gray-500">Loading contacts...</div>
-        ) : filteredContacts.length === 0 ? (
-          <div className="text-center py-8 text-gray-500">No contacts found</div>
-        ) : (
-          filteredContacts.map((contact) => {
-            const status = getStatus(contact);
-            const badge = getStatusBadge(status);
-            return (
-              <div
-                key={contact.id}
-                onClick={() => setSelectedPhone(contact.phone)}
-                className="bg-white rounded-lg shadow p-4 border-l-4 border-blue-500 cursor-pointer hover:shadow-md"
+    <div className="min-h-screen bg-gradient-to-br from-green-50 to-blue-50">
+      {/* Header */}
+      <div className="sticky top-0 z-40 bg-white border-b border-gray-200 shadow-sm">
+        <div className="max-w-7xl mx-auto px-4 py-4 sm:px-6 lg:px-8">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+            <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">WhatsApp Contacts</h1>
+            <div className="flex flex-col sm:flex-row gap-2">
+              <button
+                onClick={handleSync}
+                disabled={syncing || loading}
+                className="flex items-center justify-center gap-2 bg-blue-500 hover:bg-blue-600 disabled:bg-gray-400 text-white font-semibold py-2 px-4 rounded-lg transition duration-200"
               >
-                <div className="flex justify-between items-start mb-2">
+                <RefreshCw className={`w-4 h-4 ${syncing ? 'animate-spin' : ''}`} />
+                {syncing ? 'Syncing...' : 'Sync'}
+              </button>
+              {status === 'authenticated' && (
+                <button className="flex items-center justify-center gap-2 bg-gray-500 hover:bg-gray-600 text-white font-semibold py-2 px-4 rounded-lg transition duration-200">
+                  ✓ Connected
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Sheet Selector & Error */}
+      <div className="max-w-7xl mx-auto px-4 py-6 sm:px-6 lg:px-8">
+        {error && (
+          <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-lg flex items-start gap-3">
+            <AlertCircle className="w-5 h-5 text-red-500 flex-shrink-0 mt-0.5" />
+            <div>
+              <p className="text-red-700 font-semibold">Error</p>
+              <p className="text-red-600 text-sm">{error}</p>
+            </div>
+          </div>
+        )}
+
+        {/* Sheet Dropdown */}
+        <div className="mb-6">
+          <label className="block text-sm font-semibold text-gray-700 mb-2">Select Table</label>
+          <div className="relative">
+            <select
+              value={selectedSheet}
+              onChange={(e) => handleSheetChange(e.target.value)}
+              className="w-full bg-white border border-gray-300 rounded-lg py-3 px-4 appearance-none cursor-pointer focus:outline-none focus:ring-2 focus:ring-green-500"
+            >
+              {sheets.map((sheet) => (
+                <option key={sheet} value={sheet}>
+                  {sheet}
+                </option>
+              ))}
+            </select>
+            <ChevronDown className="absolute right-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400 pointer-events-none" />
+          </div>
+        </div>
+
+        {/* Search */}
+        <div className="mb-6">
+          <input
+            type="text"
+            placeholder="Search by phone, unit, or name..."
+            value={searchQuery}
+            onChange={(e) => handleSearch(e.target.value)}
+            className="w-full bg-white border border-gray-300 rounded-lg py-3 px-4 focus:outline-none focus:ring-2 focus:ring-green-500"
+          />
+        </div>
+
+        {/* Filters */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
+          {Object.entries(filterOptions).map(([filterKey, values]) => (
+            <div key={filterKey} className="bg-white rounded-lg border border-gray-200 overflow-hidden">
+              <button
+                onClick={() => setExpandedFilters({ ...expandedFilters, [filterKey]: !expandedFilters[filterKey] })}
+                className="w-full flex items-center justify-between p-4 hover:bg-gray-50 transition"
+              >
+                <span className="font-semibold text-gray-700 text-sm">
+                  {filterKey === 'ahmedFeedback1' && 'Ahmed Feedback 1'}
+                  {filterKey === 'ahmedFeedback2' && 'Ahmed Feedback 2'}
+                  {filterKey === 'ahmedFeedback3' && 'Ahmed Feedback 3'}
+                </span>
+                <ChevronDown className={`w-4 h-4 transition ${expandedFilters[filterKey] ? 'rotate-180' : ''}`} />
+              </button>
+
+              {expandedFilters[filterKey] && (
+                <div className="border-t border-gray-200 p-4 space-y-2 max-h-48 overflow-y-auto">
+                  {Array.from(values)
+                    .sort()
+                    .map((value) => (
+                      <label key={value} className="flex items-center gap-2 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={filters[filterKey]?.includes(value) || false}
+                          onChange={() => handleFilterChange(filterKey, value)}
+                          className="w-4 h-4 text-green-500 rounded"
+                        />
+                        <span className="text-sm text-gray-700">{value}</span>
+                      </label>
+                    ))}
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+
+        {/* Results Count */}
+        <div className="text-sm text-gray-600 mb-4">
+          Showing <span className="font-semibold">{filteredContacts.length}</span> of{' '}
+          <span className="font-semibold">{contacts.length}</span> contacts
+        </div>
+
+        {/* Contacts Grid */}
+        {loading ? (
+          <div className="text-center py-12">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-green-500 mx-auto mb-4"></div>
+            <p className="text-gray-600">Loading contacts...</p>
+          </div>
+        ) : filteredContacts.length === 0 ? (
+          <div className="text-center py-12">
+            <MessageSquare className="w-12 h-12 text-gray-300 mx-auto mb-4" />
+            <p className="text-gray-600 text-lg">No contacts found</p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {filteredContacts.map((contact) => (
+              <div
+                key={contact.rowIndex}
+                onClick={() => setSelectedContact(contact)}
+                className="bg-white rounded-lg border border-gray-200 p-4 hover:shadow-lg hover:border-green-300 cursor-pointer transition duration-200"
+              >
+                <div className="flex items-start justify-between mb-3">
                   <div>
-                    <h3 className="font-bold text-gray-900">{contact.phone}</h3>
-                    <p className="text-sm text-gray-600">{contact.name || 'No name'}</p>
+                    <p className="text-xs text-gray-500 font-semibold uppercase">Unit</p>
+                    <p className="text-lg font-bold text-gray-900">{contact.unitNumber || 'N/A'}</p>
                   </div>
-                  <span className={`px-2 py-1 rounded text-xs font-medium ${badge.bg} ${badge.text}`}>
-                    {badge.label}
-                  </span>
+                  <MapPin className="w-5 h-5 text-green-500" />
                 </div>
-                <div className="flex gap-4 text-sm text-gray-600">
-                  <span>📥 {contact.incomingCount}</span>
-                  <span>📤 {contact.outgoingCount}</span>
+
+                <p className="text-sm text-gray-600 mb-3 line-clamp-2">{contact.ownerName}</p>
+
+                <a
+                  href={getWhatsAppLink(contact.phone)}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  onClick={(e) => e.stopPropagation()}
+                  className="flex items-center gap-2 text-green-600 hover:text-green-700 font-semibold text-sm mb-3"
+                >
+                  <Phone className="w-4 h-4" />
+                  {contact.phone}
+                </a>
+
+                <div className="pt-3 border-t border-gray-100">
+                  <p className="text-xs text-gray-500 font-semibold mb-1">Status</p>
+                  <p className="text-sm text-gray-700">
+                    {contact.ahmedFeedback1 || 'No feedback'}
+                  </p>
                 </div>
-                {contact.lastMessage && (
-                  <p className="mt-2 text-xs text-gray-500 italic">"{contact.lastMessage.substring(0, 40)}..."</p>
-                )}
+
+                <button
+                  onClick={() => setSelectedContact(contact)}
+                  className="w-full mt-4 bg-green-50 hover:bg-green-100 text-green-700 font-semibold py-2 rounded-lg transition duration-200"
+                >
+                  View Details
+                </button>
               </div>
-            );
-          })
+            ))}
+          </div>
         )}
       </div>
 
-      {/* Refresh Button */}
-      <div className="mt-6 flex justify-center">
-        <button
-          onClick={loadContacts}
-          className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
-        >
-          Refresh Contacts
-        </button>
-      </div>
+      {/* Detail Modal */}
+      {selectedContact && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-end sm:items-center justify-center p-4">
+          <div className="bg-white rounded-t-lg sm:rounded-lg w-full sm:max-w-md max-h-[90vh] overflow-y-auto animate-in slide-in-from-bottom-5 sm:scale-in">
+            {/* Header */}
+            <div className="sticky top-0 bg-gradient-to-r from-green-500 to-blue-500 text-white p-6 flex items-center justify-between">
+              <div>
+                <p className="text-sm opacity-90">Unit</p>
+                <h2 className="text-2xl font-bold">{selectedContact.unitNumber}</h2>
+              </div>
+              <button
+                onClick={() => setSelectedContact(null)}
+                className="bg-white/20 hover:bg-white/30 rounded-full p-2 transition"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Content */}
+            <div className="p-6 space-y-6">
+              {/* Owner Info */}
+              <div>
+                <p className="text-xs text-gray-500 font-semibold uppercase mb-2">Owner</p>
+                <p className="text-lg font-semibold text-gray-900">{selectedContact.ownerName}</p>
+              </div>
+
+              {/* Phone Numbers */}
+              <div>
+                <p className="text-xs text-gray-500 font-semibold uppercase mb-3">Contact Numbers</p>
+                <div className="space-y-2">
+                  {selectedContact.phone && (
+                    <a
+                      href={getWhatsAppLink(selectedContact.phone)}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex items-center justify-between p-3 bg-green-50 hover:bg-green-100 rounded-lg transition"
+                    >
+                      <span className="text-sm font-semibold text-gray-700">Primary</span>
+                      <div className="text-right">
+                        <p className="font-mono text-green-600 font-semibold">{selectedContact.phone}</p>
+                      </div>
+                    </a>
+                  )}
+                  {selectedContact.mobile2 && (
+                    <a
+                      href={getWhatsAppLink(selectedContact.mobile2)}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex items-center justify-between p-3 bg-gray-50 hover:bg-gray-100 rounded-lg transition"
+                    >
+                      <span className="text-sm font-semibold text-gray-700">Secondary</span>
+                      <div className="text-right">
+                        <p className="font-mono text-gray-600 font-semibold">{selectedContact.mobile2}</p>
+                      </div>
+                    </a>
+                  )}
+                  {selectedContact.mobile3 && (
+                    <a
+                      href={getWhatsAppLink(selectedContact.mobile3)}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex items-center justify-between p-3 bg-gray-50 hover:bg-gray-100 rounded-lg transition"
+                    >
+                      <span className="text-sm font-semibold text-gray-700">Tertiary</span>
+                      <div className="text-right">
+                        <p className="font-mono text-gray-600 font-semibold">{selectedContact.mobile3}</p>
+                      </div>
+                    </a>
+                  )}
+                </div>
+              </div>
+
+              {/* Feedback Info */}
+              <div className="space-y-3 pt-4 border-t border-gray-200">
+                {selectedContact.ahmedFeedback1 && (
+                  <div>
+                    <p className="text-xs text-gray-500 font-semibold uppercase mb-1">Ahmed Feedback 1</p>
+                    <p className="text-sm text-gray-700 bg-blue-50 p-2 rounded">{selectedContact.ahmedFeedback1}</p>
+                  </div>
+                )}
+                {selectedContact.ahmedFeedback2 && (
+                  <div>
+                    <p className="text-xs text-gray-500 font-semibold uppercase mb-1">Ahmed Feedback 2</p>
+                    <p className="text-sm text-gray-700 bg-blue-50 p-2 rounded">{selectedContact.ahmedFeedback2}</p>
+                  </div>
+                )}
+                {selectedContact.ahmedFeedback3 && (
+                  <div>
+                    <p className="text-xs text-gray-500 font-semibold uppercase mb-1">Ahmed Feedback 3</p>
+                    <p className="text-sm text-gray-700 bg-blue-50 p-2 rounded">{selectedContact.ahmedFeedback3}</p>
+                  </div>
+                )}
+              </div>
+
+              {/* Action Buttons */}
+              <div className="pt-4 border-t border-gray-200 space-y-2">
+                <a
+                  href={getWhatsAppLink(selectedContact.phone)}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="w-full bg-green-500 hover:bg-green-600 text-white font-semibold py-3 rounded-lg flex items-center justify-center gap-2 transition duration-200"
+                >
+                  <MessageSquare className="w-5 h-5" />
+                  Open in WhatsApp
+                </a>
+                <button
+                  onClick={() => setSelectedContact(null)}
+                  className="w-full bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold py-3 rounded-lg transition duration-200"
+                >
+                  Close
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
