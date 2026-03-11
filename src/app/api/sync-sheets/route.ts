@@ -27,13 +27,35 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Fetch contacts from Google Sheet
     const contacts = await fetchContactsFromSheet(accessToken, sheetName);
     let synced = 0;
 
+    // Sync each contact to database
     for (const contact of contacts) {
       await sql`
-        INSERT INTO contacts (unit_number, owner_name, phone, mobile2, mobile3, ahmed_feedback_1, ahmed_feedback_2, ahmed_feedback_3, contact_status)
-        VALUES (${contact.unitNumber}, ${contact.ownerName}, ${contact.phone}, ${contact.mobile2 || null}, ${contact.mobile3 || null}, ${contact.ahmedFeedback1}, ${contact.ahmedFeedback2}, ${contact.ahmedFeedback3}, 'Synced')
+        INSERT INTO contacts (
+          unit_number, 
+          owner_name, 
+          phone, 
+          mobile2, 
+          mobile3, 
+          ahmed_feedback_1, 
+          ahmed_feedback_2, 
+          ahmed_feedback_3, 
+          contact_status
+        )
+        VALUES (
+          ${contact.unit || ""}, 
+          ${contact.owner1_name || ""}, 
+          ${contact.owner1_mobile || ""}, 
+          ${contact.owner2_mobile || ""}, 
+          ${contact.owner3_mobile || ""}, 
+          ${contact.ahmed_feedback_1 || ""}, 
+          ${contact.ahmed_feedback_2 || ""}, 
+          ${contact.ahmed_feedback_3 || ""}, 
+          'Synced'
+        )
         ON CONFLICT (unit_number) DO UPDATE SET
           owner_name = COALESCE(EXCLUDED.owner_name, contacts.owner_name),
           phone = EXCLUDED.phone,
