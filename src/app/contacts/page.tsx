@@ -151,7 +151,7 @@ export default function ContactsPage() {
     setError("");
 
     try {
-      const res = await fetch(\`/api/sheet-data?sheetName=\${encodeURIComponent(selectedSheet)}\`);
+      const res = await fetch(`/api/sheet-data?sheetName=${encodeURIComponent(selectedSheet)}`);
       const data = await res.json();
 
       if (!data.success) {
@@ -221,12 +221,12 @@ export default function ContactsPage() {
       if (diff > 0) {
         const months = Math.floor(diff / 30);
         const days = diff % 30;
-        return \`\${months}m \${days}d remaining\`;
+        return `${months}m ${days}d remaining`;
       } else if (diff < 0) {
         const absDiff = Math.abs(diff);
         const months = Math.floor(absDiff / 30);
         const days = absDiff % 30;
-        return \`\${months}m \${days}d expired\`;
+        return `${months}m ${days}d expired`;
       } else {
         return "Due today";
       }
@@ -1104,9 +1104,9 @@ export default function ContactsPage() {
                           selectedContact.unit
                         );
                         window.open(
-                          \`https://wa.me/\${selectedMobile}?text=\${encodeURIComponent(
+                          `https://wa.me/${selectedMobile}?text=${encodeURIComponent(
                             message
-                          )}\`,
+                          )}`,
                           "_blank"
                         );
                         setShowWhatsAppModal(false);
