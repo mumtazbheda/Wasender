@@ -239,8 +239,8 @@ export default function ContactsPage() {
   useEffect(() => {
     let filtered = contacts.filter((contact) => {
       const matchesSearch =
-        contact.unit.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        contact.owner1_name.toLowerCase().includes(searchQuery.toLowerCase());
+        (contact.unit || "").toLowerCase().includes(searchQuery.toLowerCase()) ||
+        (contact.owner1_name || "").toLowerCase().includes(searchQuery.toLowerCase());
 
       const matchesPurpose =
         filters.purpose.length === 0 ||
