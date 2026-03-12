@@ -24,11 +24,11 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    const data = await fetchContactData(accessToken, sheetName);
+    const contacts = await fetchContactData(accessToken, sheetName);
 
     return NextResponse.json({
       success: true,
-      data: data,
+      contacts: contacts,
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown error";
