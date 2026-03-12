@@ -275,6 +275,9 @@ export default function ContactsPage() {
     owner1Mobile: '' as string,
     owner2Mobile: '' as string,
     owner3Mobile: '' as string,
+    owner1CountryCode: '' as string,
+    owner2CountryCode: '' as string,
+    owner3CountryCode: '' as string,
   });
 
   // ─── Load sheets on mount ─────────────────────────────────────────────────
