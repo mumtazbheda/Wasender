@@ -1482,8 +1482,10 @@ export default function ContactsPage() {
                 </button>
                 <button
                   onClick={() => {
-                    setSelectedMobile(selectedContact.owner1_mobile);
-                    setShowWhatsAppModal(true);
+                    const phone = (selectedContact.owner1_mobile || '').replace(/[^0-9+]/g, '');
+                    if (phone) {
+                      window.open('https://wa.me/' + phone.replace('+', ''), '_blank');
+                    }
                   }}
                   disabled={!selectedContact.owner1_mobile}
                   className="flex-1 px-4 py-2 bg-green-600 hover:bg-green-700 disabled:bg-gray-400 text-white rounded-lg transition font-medium"

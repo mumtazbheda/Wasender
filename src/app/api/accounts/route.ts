@@ -11,8 +11,15 @@ export async function GET() {
     if (result.rows.length === 0 && envApiKey) {
       await sql`
         INSERT INTO wa_accounts (name, phone, api_key, account_type, status)
-        VALUES ('Ahmed', '', ${envApiKey}, 'wasender', 'active')
+        VALUES ('Ahmed', 'Connected via WAsender API', ${envApiKey}, 'wasender', 'active')
       `;
+      result = await sql`SELECT * FROM wa_accounts ORDER BY connected_at ASC`;
+    }
+    
+    // If Ahmed exists but has no phone, update it
+    const ahmed = result.rows.find((a: any) => a.name === 'Ahmed' && (!a.phone || a.phone === ''));
+    if (ahmed) {
+      await sql`UPDATE wa_accounts SET phone = 'Connected via WAsender API' WHERE id = ${ahmed.id}`;
       result = await sql`SELECT * FROM wa_accounts ORDER BY connected_at ASC`;
     }
     

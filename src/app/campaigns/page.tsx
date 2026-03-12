@@ -351,7 +351,7 @@ export default function CampaignsPage() {
     setTestSending(true);
     setTestStatus(null);
     try {
-      const selectedTemplateData = templates.find(t => t.id === selectedTemplate);
+      const selectedTemplateData = templates.find(t => String(t.id) === String(selectedTemplate));
       if (!selectedTemplateData) throw new Error('No template selected');
       
       const selectedContactObjects = filteredContacts.filter(c => selectedContacts.has(c.rowIndex));
@@ -399,7 +399,7 @@ export default function CampaignsPage() {
     setSending(true);
     setSendStatus(null);
     try {
-      const selectedTemplateData = templates.find(t => t.id === selectedTemplate);
+      const selectedTemplateData = templates.find(t => String(t.id) === String(selectedTemplate));
       const selectedContactObjects = filteredContacts.filter(c => selectedContacts.has(c.rowIndex));
       
       const res = await fetch('/api/send-campaign', {
@@ -958,7 +958,7 @@ export default function CampaignsPage() {
   // STEP 2: Select Template
   if (step === 2) {
     const selectedContactObjects = filteredContacts.filter((c) => selectedContacts.has(c.rowIndex));
-    const selectedTemplateData = templates.find((t) => t.id === selectedTemplate);
+    const selectedTemplateData = templates.find((t) => String(t.id) === String(selectedTemplate));
 
     return (
       <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 p-4 sm:p-6">
@@ -1211,7 +1211,7 @@ export default function CampaignsPage() {
 
   // STEP 4: Review & Send
   const selectedContactObjects = filteredContacts.filter((c) => selectedContacts.has(c.rowIndex));
-  const selectedTemplateData = templates.find((t) => t.id === selectedTemplate);
+  const selectedTemplateData = templates.find((t) => String(t.id) === String(selectedTemplate));
   const selectedAccountData = accounts.find((a: any) => String(a.id) === selectedAccountId);
 
   return (
