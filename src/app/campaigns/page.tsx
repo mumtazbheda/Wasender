@@ -304,17 +304,17 @@ export default function CampaignsPage() {
         matchFilter(filters.zoha_feedback_2, contact.zoha_feedback_2) &&
         matchFilter(filters.zoha_feedback_3, contact.zoha_feedback_3) &&
         (!filters.owner1Mobile ||
-          (filters.owner1Mobile === 'blank' && (!contact.owner_1_mobile || String(contact.owner_1_mobile).trim() === '')) ||
-          (filters.owner1Mobile === 'zero' && String(contact.owner_1_mobile || '').trim() === '0') ||
-          (filters.owner1Mobile === 'nonblank' && contact.owner_1_mobile && String(contact.owner_1_mobile).trim() !== '' && String(contact.owner_1_mobile).trim() !== '0')) &&
+          (filters.owner1Mobile === 'blank' && (!contact.owner1_mobile || String(contact.owner1_mobile).trim() === '')) ||
+          (filters.owner1Mobile === 'zero' && String(contact.owner1_mobile || '').trim() === '0') ||
+          (filters.owner1Mobile === 'nonblank' && contact.owner1_mobile && String(contact.owner1_mobile).trim() !== '' && String(contact.owner1_mobile).trim() !== '0')) &&
         (!filters.owner2Mobile ||
-          (filters.owner2Mobile === 'blank' && (!contact.owner_2_mobile || String(contact.owner_2_mobile).trim() === '')) ||
-          (filters.owner2Mobile === 'zero' && String(contact.owner_2_mobile || '').trim() === '0') ||
-          (filters.owner2Mobile === 'nonblank' && contact.owner_2_mobile && String(contact.owner_2_mobile).trim() !== '' && String(contact.owner_2_mobile).trim() !== '0')) &&
+          (filters.owner2Mobile === 'blank' && (!contact.owner2_mobile || String(contact.owner2_mobile).trim() === '')) ||
+          (filters.owner2Mobile === 'zero' && String(contact.owner2_mobile || '').trim() === '0') ||
+          (filters.owner2Mobile === 'nonblank' && contact.owner2_mobile && String(contact.owner2_mobile).trim() !== '' && String(contact.owner2_mobile).trim() !== '0')) &&
         (!filters.owner3Mobile ||
-          (filters.owner3Mobile === 'blank' && (!contact.owner_3_mobile || String(contact.owner_3_mobile).trim() === '')) ||
-          (filters.owner3Mobile === 'zero' && String(contact.owner_3_mobile || '').trim() === '0') ||
-          (filters.owner3Mobile === 'nonblank' && contact.owner_3_mobile && String(contact.owner_3_mobile).trim() !== '' && String(contact.owner_3_mobile).trim() !== '0'));
+          (filters.owner3Mobile === 'blank' && (!contact.owner3_mobile || String(contact.owner3_mobile).trim() === '')) ||
+          (filters.owner3Mobile === 'zero' && String(contact.owner3_mobile || '').trim() === '0') ||
+          (filters.owner3Mobile === 'nonblank' && contact.owner3_mobile && String(contact.owner3_mobile).trim() !== '' && String(contact.owner3_mobile).trim() !== '0'));
 
       return matchSearch && matchFilters;
     });
@@ -844,9 +844,9 @@ export default function CampaignsPage() {
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
                   >
                     <option value="">All</option>
-                    <option value="blank">Blank ({contacts.filter(c => !c.owner_1_mobile || String(c.owner_1_mobile).trim() === '').length})</option>
-                    <option value="zero">Zero - 0 ({contacts.filter(c => String(c.owner_1_mobile || '').trim() === '0').length})</option>
-                    <option value="nonblank">Non-blank ({contacts.filter(c => c.owner_1_mobile && String(c.owner_1_mobile).trim() !== '' && String(c.owner_1_mobile).trim() !== '0').length})</option>
+                    <option value="blank">Blank ({contacts.filter(c => !c.owner1_mobile || String(c.owner1_mobile).trim() === '').length})</option>
+                    <option value="zero">Zero - 0 ({contacts.filter(c => String(c.owner1_mobile || '').trim() === '0').length})</option>
+                    <option value="nonblank">Non-blank ({contacts.filter(c => c.owner1_mobile && String(c.owner1_mobile).trim() !== '' && String(c.owner1_mobile).trim() !== '0').length})</option>
                   </select>
                 </div>
                 <div>
@@ -857,9 +857,9 @@ export default function CampaignsPage() {
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
                   >
                     <option value="">All</option>
-                    <option value="blank">Blank ({contacts.filter(c => !c.owner_2_mobile || String(c.owner_2_mobile).trim() === '').length})</option>
-                    <option value="zero">Zero - 0 ({contacts.filter(c => String(c.owner_2_mobile || '').trim() === '0').length})</option>
-                    <option value="nonblank">Non-blank ({contacts.filter(c => c.owner_2_mobile && String(c.owner_2_mobile).trim() !== '' && String(c.owner_2_mobile).trim() !== '0').length})</option>
+                    <option value="blank">Blank ({contacts.filter(c => !c.owner2_mobile || String(c.owner2_mobile).trim() === '').length})</option>
+                    <option value="zero">Zero - 0 ({contacts.filter(c => String(c.owner2_mobile || '').trim() === '0').length})</option>
+                    <option value="nonblank">Non-blank ({contacts.filter(c => c.owner2_mobile && String(c.owner2_mobile).trim() !== '' && String(c.owner2_mobile).trim() !== '0').length})</option>
                   </select>
                 </div>
                 <div>
@@ -870,9 +870,9 @@ export default function CampaignsPage() {
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
                   >
                     <option value="">All</option>
-                    <option value="blank">Blank ({contacts.filter(c => !c.owner_3_mobile || String(c.owner_3_mobile).trim() === '').length})</option>
-                    <option value="zero">Zero - 0 ({contacts.filter(c => String(c.owner_3_mobile || '').trim() === '0').length})</option>
-                    <option value="nonblank">Non-blank ({contacts.filter(c => c.owner_3_mobile && String(c.owner_3_mobile).trim() !== '' && String(c.owner_3_mobile).trim() !== '0').length})</option>
+                    <option value="blank">Blank ({contacts.filter(c => !c.owner3_mobile || String(c.owner3_mobile).trim() === '').length})</option>
+                    <option value="zero">Zero - 0 ({contacts.filter(c => String(c.owner3_mobile || '').trim() === '0').length})</option>
+                    <option value="nonblank">Non-blank ({contacts.filter(c => c.owner3_mobile && String(c.owner3_mobile).trim() !== '' && String(c.owner3_mobile).trim() !== '0').length})</option>
                   </select>
                 </div>
               </div>
