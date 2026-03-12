@@ -14,16 +14,17 @@ const Sidebar = () => {
     { name: "Dashboard", path: "/", icon: "📊" },
     { name: "Contacts", path: "/contacts", icon: "👥" },
     { name: "Campaigns", path: "/campaigns", icon: "📧" },
+    { name: "Accounts", path: "/accounts", icon: "📱" },
     { name: "Templates", path: "/templates", icon: "📝" },
     { name: "Messages", path: "/messages", icon: "💬" },
   ];
 
   return (
     <>
-      {/* Burger Menu Button - TOP LEFT */}
+      {/* Burger Menu Button - TOP LEFT (Fixed positioning for mobile) */}
       <button
         onClick={() => setIsOpen(!isOpen)}
-        className="fixed top-4 left-4 z-40 lg:hidden bg-blue-600 hover:bg-blue-700 text-white p-2 rounded-lg transition"
+        className="fixed top-4 left-4 z-50 lg:hidden bg-blue-600 hover:bg-blue-700 text-white p-2 rounded-lg transition"
         aria-label="Toggle sidebar"
       >
         {isOpen ? (
@@ -41,13 +42,13 @@ const Sidebar = () => {
 
       {/* Sidebar - Desktop Fixed, Mobile Overlay */}
       <div
-        className={`fixed left-0 top-0 h-full w-64 bg-gray-900 text-white shadow-lg transition-all duration-300 z-30 ${
+        className={`fixed left-0 top-0 h-full w-64 bg-gray-900 text-white shadow-lg transition-all duration-300 z-40 ${
           isOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"
         }`}
       >
-        {/* Sidebar Header */}
-        <div className="p-6 border-b border-gray-700">
-          <h1 className="text-2xl font-bold">📱 Wasender</h1>
+        {/* Sidebar Header - with proper padding to avoid button overlap */}
+        <div className="p-6 border-b border-gray-700 pt-8 lg:pt-6">
+          <h1 className="text-2xl font-bold truncate pr-2">📱 Wasender</h1>
           <p className="text-sm text-gray-400 mt-1">WhatsApp Automation</p>
         </div>
 
@@ -67,7 +68,7 @@ const Sidebar = () => {
                 }`}
               >
                 <span className="mr-3 text-lg">{item.icon}</span>
-                {item.name}
+                <span className="truncate">{item.name}</span>
               </Link>
             );
           })}
@@ -78,11 +79,11 @@ const Sidebar = () => {
           <div className="absolute bottom-0 left-0 right-0 p-6 border-t border-gray-700 bg-gray-800">
             <div className="mb-4">
               <p className="text-sm text-gray-400">Signed in as</p>
-              <p className="font-medium truncate">{session.user?.email}</p>
+              <p className="font-medium truncate text-sm">{session.user?.email}</p>
             </div>
             <button
               onClick={() => signOut()}
-              className="w-full bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg transition text-sm"
+              className="w-full bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg transition text-sm font-medium"
             >
               Sign Out
             </button>
@@ -93,12 +94,12 @@ const Sidebar = () => {
       {/* Mobile Overlay - Click to close */}
       {isOpen && (
         <div
-          className="fixed inset-0 bg-black bg-opacity-50 z-20 lg:hidden"
+          className="fixed inset-0 bg-black bg-opacity-50 z-30 lg:hidden"
           onClick={() => setIsOpen(false)}
         />
       )}
 
-      {/* Main Content Padding - Prevent overlap */}
+      {/* Main Content Padding - Prevent overlap on mobile */}
       <div className="lg:hidden" style={{ height: "60px" }} />
     </>
   );
