@@ -3,10 +3,11 @@ import { sql } from '@/lib/db';
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const campaignId = parseInt(params.id);
+    const { id } = await params;
+    const campaignId = parseInt(id);
     if (isNaN(campaignId)) {
       return NextResponse.json({ message: 'Invalid campaign ID' }, { status: 400 });
     }
