@@ -1,79 +1,73 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { promises as fs } from 'fs';
-import path from 'path';
-
-const ACCOUNTS_FILE = path.join(process.cwd(), 'data', 'accounts.json');
-
-async function getAccounts() {
-  try {
-    const data = await fs.readFile(ACCOUNTS_FILE, 'utf-8');
-    return JSON.parse(data);
-  } catch {
-    return [];
-  }
-}
-
-async function replaceVariables(template: string, contact: any) {
-  return template
-    .replace(/{name}/g, contact.owner1_name || '')
-    .replace(/{unit}/g, contact.unit || '')
-    .replace(/{rooms_en}/g, contact.rooms_en || '')
-    .replace(/{project_name_en}/g, contact.project_name_en || '')
-    .replace(/{phone}/g, contact.owner1_mobile || '');
-}
+import { sql } from '@/lib/db';
 
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { phone, template, contact, accountId } = body;
+    const { phone, message, accountId } = body;
 
-    if (!phone || !template || !accountId) {
-      return NextResponse.json({ message: 'Missing required fields' }, { status: 400 });
+    if (!phone || !message || !accountId) {
+      return NextResponse.json({ message: 'phone, message, and accountId are required' }, { status: 400 });
     }
 
-    const accounts = await getAccounts();
-    const account = accounts.find((a: any) => a.id === accountId);
-
-    if (!account) {
+    const result = await sql`SELECT * FROM wa_accounts WHERE id = ${parseInt(accountId)}`;
+    if (result.rows.length === 0) {
       return NextResponse.json({ message: 'Account not found' }, { status: 404 });
     }
+    
+    const account = result.rows[0];
+    const cleanPhone = phone.replace(/[^0-9+]/g, '');
+    let sendResult;
 
-    // Replace variables in template
-    const message = await replaceVariables(template, contact);
-
-    // Send via WhatsApp API
-    const whatsappResponse = await fetch(
-      `https://graph.instagram.com/v18.0/${account.phoneNumberId}/messages`,
-      {
+    if (account.account_type === 'whatsapp_business') {
+      // WhatsApp Business API (Meta Graph API)
+      const whatsappRes = await fetch(
+        `https://graph.facebook.com/v18.0/${account.phone_number_id}/messages`,
+        {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${account.api_key}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            messaging_product: 'whatsapp',
+            recipient_type: 'individual',
+            to: cleanPhone,
+            type: 'text',
+            text: { body: message },
+          }),
+        }
+      );
+      sendResult = await whatsappRes.json();
+      if (!whatsappRes.ok) {
+        return NextResponse.json({ message: 'Failed to send: ' + JSON.stringify(sendResult) }, { status: 400 });
+      }
+    } else {
+      // WAsender API
+      const wasenderRes = await fetch('https://wasenderapi.com/api/send-message', {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${account.accessToken}`,
+          'Authorization': `Bearer ${account.api_key}`,
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({
-          messaging_product: 'whatsapp',
-          recipient_type: 'individual',
-          to: phone.replace(/[^0-9+]/g, ''),
-          type: 'text',
-          text: { body: message },
-        }),
+        body: JSON.stringify({ to: cleanPhone, text: message }),
+      });
+      sendResult = await wasenderRes.json();
+      if (!wasenderRes.ok || !sendResult.success) {
+        return NextResponse.json({ message: 'Failed to send: ' + (sendResult.error || JSON.stringify(sendResult)) }, { status: 400 });
       }
-    );
-
-    if (!whatsappResponse.ok) {
-      const error = await whatsappResponse.json();
-      return NextResponse.json(
-        { message: `Failed to send message: ${JSON.stringify(error)}` },
-        { status: 400 }
-      );
     }
 
-    const result = await whatsappResponse.json();
-    return NextResponse.json({ message: 'Test message sent successfully', result }, { status: 200 });
+    // Log the test message
+    try {
+      await sql`
+        INSERT INTO messages (message_id, direction, phone, message_text, status)
+        VALUES (${'test_' + Date.now()}, 'outgoing', ${cleanPhone}, ${message}, 'sent')
+      `;
+    } catch {}
+
+    return NextResponse.json({ message: 'Test message sent successfully', result: sendResult }, { status: 200 });
   } catch (error: any) {
-    return NextResponse.json(
-      { message: `Failed to send test message: ${error.message}` },
-      { status: 500 }
-    );
+    return NextResponse.json({ message: 'Failed: ' + error.message }, { status: 500 });
   }
 }

@@ -1,68 +1,53 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { promises as fs } from 'fs';
-import path from 'path';
-
-const ACCOUNTS_FILE = path.join(process.cwd(), 'data', 'accounts.json');
-
-async function ensureAccountsFile() {
-  try {
-    await fs.access(ACCOUNTS_FILE);
-  } catch {
-    const dir = path.dirname(ACCOUNTS_FILE);
-    await fs.mkdir(dir, { recursive: true });
-    await fs.writeFile(ACCOUNTS_FILE, JSON.stringify([], null, 2));
-  }
-}
-
-async function getAccounts() {
-  await ensureAccountsFile();
-  const data = await fs.readFile(ACCOUNTS_FILE, 'utf-8');
-  return JSON.parse(data);
-}
-
-async function saveAccounts(accounts: any[]) {
-  await ensureAccountsFile();
-  await fs.writeFile(ACCOUNTS_FILE, JSON.stringify(accounts, null, 2));
-}
+import { sql } from '@/lib/db';
 
 export async function GET() {
   try {
-    const accounts = await getAccounts();
+    const envApiKey = process.env.WASENDER_API_KEY;
+    
+    let result = await sql`SELECT * FROM wa_accounts ORDER BY connected_at ASC`;
+    
+    // Auto-create Ahmed account if none exist and env key is set
+    if (result.rows.length === 0 && envApiKey) {
+      await sql`
+        INSERT INTO wa_accounts (name, phone, api_key, account_type, status)
+        VALUES ('Ahmed', '', ${envApiKey}, 'wasender', 'active')
+      `;
+      result = await sql`SELECT * FROM wa_accounts ORDER BY connected_at ASC`;
+    }
+    
+    const accounts = result.rows.map((a: any) => ({
+      ...a,
+      api_key: a.api_key ? '***' + a.api_key.slice(-4) : '',
+      api_key_full: undefined // never expose
+    }));
+    
     return NextResponse.json({ accounts }, { status: 200 });
-  } catch (error) {
-    return NextResponse.json({ message: 'Failed to fetch accounts' }, { status: 500 });
+  } catch (error: any) {
+    return NextResponse.json({ message: 'Failed to fetch accounts: ' + error.message }, { status: 500 });
   }
 }
 
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { name, phone, accessToken, businessAccountId, phoneNumberId } = body;
-
-    if (!name || !phone || !accessToken || !businessAccountId || !phoneNumberId) {
-      return NextResponse.json(
-        { message: 'Missing required fields' },
-        { status: 400 }
-      );
+    const { name, phone, apiKey, accountType, businessAccountId, phoneNumberId } = body;
+    
+    if (!name || !apiKey) {
+      return NextResponse.json({ message: 'Name and API Key are required' }, { status: 400 });
     }
-
-    const accounts = await getAccounts();
-    const newAccount = {
-      id: Date.now().toString(),
-      name,
-      phone,
-      accessToken,
-      businessAccountId,
-      phoneNumberId,
-      status: 'active' as const,
-      connectedAt: new Date().toISOString(),
-    };
-
-    accounts.push(newAccount);
-    await saveAccounts(accounts);
-
-    return NextResponse.json({ account: newAccount }, { status: 201 });
-  } catch (error) {
-    return NextResponse.json({ message: 'Failed to create account' }, { status: 500 });
+    
+    const result = await sql`
+      INSERT INTO wa_accounts (name, phone, api_key, account_type, business_account_id, phone_number_id, status)
+      VALUES (${name}, ${phone || ''}, ${apiKey}, ${accountType || 'wasender'}, ${businessAccountId || ''}, ${phoneNumberId || ''}, 'active')
+      RETURNING *
+    `;
+    
+    const account = result.rows[0];
+    return NextResponse.json({ 
+      account: { ...account, api_key: '***' + account.api_key.slice(-4) }
+    }, { status: 201 });
+  } catch (error: any) {
+    return NextResponse.json({ message: 'Failed to create account: ' + error.message }, { status: 500 });
   }
 }

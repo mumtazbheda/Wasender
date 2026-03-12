@@ -21,39 +21,41 @@ const Sidebar = () => {
 
   return (
     <>
-      {/* Burger Menu Button - TOP LEFT (Fixed positioning for mobile) */}
-      <button
-        onClick={() => setIsOpen(!isOpen)}
-        className="fixed top-4 left-4 z-50 lg:hidden bg-blue-600 hover:bg-blue-700 text-white p-2 rounded-lg transition"
-        aria-label="Toggle sidebar"
-      >
-        {isOpen ? (
-          /* X icon when open */
-          <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-          </svg>
-        ) : (
-          /* Hamburger icon when closed */
-          <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
-          </svg>
-        )}
-      </button>
+      {/* Burger Menu Button - Only shown when sidebar is CLOSED on mobile */}
+      {!isOpen && (
+        <button
+          onClick={() => setIsOpen(true)}
+          className="fixed top-4 left-4 z-50 lg:hidden bg-blue-600 hover:bg-blue-700 text-white p-2.5 rounded-lg transition shadow-lg"
+          aria-label="Open menu"
+        >
+          <span className="text-xl leading-none block w-6 h-6 flex items-center justify-center">☰</span>
+        </button>
+      )}
 
-      {/* Sidebar - Desktop Fixed, Mobile Overlay */}
+      {/* Sidebar Panel - Desktop always visible, Mobile slides in */}
       <div
         className={`fixed left-0 top-0 h-full w-64 bg-gray-900 text-white shadow-lg transition-all duration-300 z-40 ${
           isOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"
         }`}
       >
-        {/* Sidebar Header - with proper padding to avoid button overlap */}
-        <div className="p-6 border-b border-gray-700 pt-8 lg:pt-6">
-          <h1 className="text-2xl font-bold truncate pr-2">📱 Wasender</h1>
-          <p className="text-sm text-gray-400 mt-1">WhatsApp Automation</p>
+        {/* Sidebar Header - Logo & Close Button */}
+        <div className="p-6 border-b border-gray-700 flex items-center justify-between">
+          <div className="min-w-0">
+            <h1 className="text-2xl font-bold truncate">📱 Wasender</h1>
+            <p className="text-sm text-gray-400 mt-1">WhatsApp Automation</p>
+          </div>
+          {/* Close (X) button - INSIDE sidebar at top-right, only on mobile */}
+          <button
+            onClick={() => setIsOpen(false)}
+            className="lg:hidden flex-shrink-0 ml-3 text-gray-400 hover:text-white hover:bg-gray-700 rounded-lg p-2 transition"
+            aria-label="Close menu"
+          >
+            <span className="text-xl leading-none block w-6 h-6 flex items-center justify-center">✕</span>
+          </button>
         </div>
 
         {/* Navigation Links */}
-        <nav className="mt-6">
+        <nav className="mt-4">
           {menuItems.map((item) => {
             const isActive = pathname === item.path;
             return (
@@ -74,7 +76,7 @@ const Sidebar = () => {
           })}
         </nav>
 
-        {/* User Info */}
+        {/* User Info & Sign Out - Anchored at bottom */}
         {session && (
           <div className="absolute bottom-0 left-0 right-0 p-6 border-t border-gray-700 bg-gray-800">
             <div className="mb-4">
@@ -85,13 +87,13 @@ const Sidebar = () => {
               onClick={() => signOut()}
               className="w-full bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg transition text-sm font-medium"
             >
-              Sign Out
+              🚪 Sign Out
             </button>
           </div>
         )}
       </div>
 
-      {/* Mobile Overlay - Click to close */}
+      {/* Mobile Overlay Backdrop - Click to close */}
       {isOpen && (
         <div
           className="fixed inset-0 bg-black bg-opacity-50 z-30 lg:hidden"
@@ -99,7 +101,7 @@ const Sidebar = () => {
         />
       )}
 
-      {/* Main Content Padding - Prevent overlap on mobile */}
+      {/* Spacer for mobile top bar so page content doesn't hide behind burger button */}
       <div className="lg:hidden" style={{ height: "60px" }} />
     </>
   );

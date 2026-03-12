@@ -1,40 +1,66 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { promises as fs } from 'fs';
-import path from 'path';
+import { sql } from '@/lib/db';
 
-const ACCOUNTS_FILE = path.join(process.cwd(), 'data', 'accounts.json');
-const CAMPAIGNS_FILE = path.join(process.cwd(), 'data', 'campaigns.json');
-
-async function getAccounts() {
-  try {
-    const data = await fs.readFile(ACCOUNTS_FILE, 'utf-8');
-    return JSON.parse(data);
-  } catch {
-    return [];
+function convertDelay(amount: number, unit: string): number {
+  switch (unit) {
+    case 'seconds': return amount * 1000;
+    case 'minutes': return amount * 60 * 1000;
+    case 'hours': return amount * 60 * 60 * 1000;
+    default: return amount * 1000;
   }
 }
 
-async function ensureCampaignsFile() {
+function getRandomDelay(base: number, randomize: boolean): number {
+  if (!randomize || base === 0) return base;
+  const variance = base * 0.2;
+  return Math.round(base + (Math.random() - 0.5) * 2 * variance);
+}
+
+async function sendToPhone(account: any, phone: string, message: string): Promise<{ success: boolean; error?: string }> {
   try {
-    await fs.access(CAMPAIGNS_FILE);
-  } catch {
-    const dir = path.dirname(CAMPAIGNS_FILE);
-    await fs.mkdir(dir, { recursive: true });
-    await fs.writeFile(CAMPAIGNS_FILE, JSON.stringify([], null, 2));
+    const cleanPhone = phone.replace(/[^0-9+]/g, '');
+    if (!cleanPhone) return { success: false, error: 'No phone number' };
+
+    if (account.account_type === 'whatsapp_business') {
+      const res = await fetch(
+        `https://graph.facebook.com/v18.0/${account.phone_number_id}/messages`,
+        {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${account.api_key}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            messaging_product: 'whatsapp',
+            recipient_type: 'individual',
+            to: cleanPhone,
+            type: 'text',
+            text: { body: message },
+          }),
+        }
+      );
+      if (res.ok) return { success: true };
+      const err = await res.json();
+      return { success: false, error: JSON.stringify(err) };
+    } else {
+      const res = await fetch('https://wasenderapi.com/api/send-message', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${account.api_key}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ to: cleanPhone, text: message }),
+      });
+      const data = await res.json();
+      if (res.ok && data.success) return { success: true };
+      return { success: false, error: data.error || 'Send failed' };
+    }
+  } catch (err: any) {
+    return { success: false, error: err.message };
   }
 }
 
-async function getCampaigns() {
-  await ensureCampaignsFile();
-  const data = await fs.readFile(CAMPAIGNS_FILE, 'utf-8');
-  return JSON.parse(data);
-}
-
-async function saveCampaigns(campaigns: any[]) {
-  await fs.writeFile(CAMPAIGNS_FILE, JSON.stringify(campaigns, null, 2));
-}
-
-async function replaceVariables(template: string, contact: any) {
+function replaceVars(template: string, contact: any): string {
   return template
     .replace(/{name}/g, contact.owner1_name || '')
     .replace(/{unit}/g, contact.unit || '')
@@ -43,167 +69,94 @@ async function replaceVariables(template: string, contact: any) {
     .replace(/{phone}/g, contact.owner1_mobile || '');
 }
 
-function convertDelay(amount: number, unit: string): number {
-  switch (unit) {
-    case 'seconds':
-      return amount * 1000;
-    case 'minutes':
-      return amount * 60 * 1000;
-    case 'hours':
-      return amount * 60 * 60 * 1000;
-    case 'days':
-      return amount * 24 * 60 * 60 * 1000;
-    default:
-      return amount * 1000;
-  }
-}
-
-function getRandomDelay(baseDelay: number, randomize: boolean): number {
-  if (!randomize) return baseDelay;
-  const variance = baseDelay * 0.2; // 20% variance
-  return baseDelay + (Math.random() - 0.5) * 2 * variance;
-}
-
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { contacts, template, delayBefore, delayBetween, delayUnit, randomizeDelay, accountId } =
-      body;
+    const { contacts, templateName, templateBody, accountId, delayBefore, delayBetween, delayUnit, randomizeDelay, filtersUsed } = body;
 
-    if (!contacts || !template || !accountId) {
-      return NextResponse.json({ message: 'Missing required fields' }, { status: 400 });
+    if (!contacts?.length || !templateBody || !accountId) {
+      return NextResponse.json({ message: 'contacts, templateBody, and accountId are required' }, { status: 400 });
     }
 
-    const accounts = await getAccounts();
-    const account = accounts.find((a: any) => a.id === accountId);
-
-    if (!account) {
+    // Get account with full API key
+    const accountResult = await sql`SELECT * FROM wa_accounts WHERE id = ${parseInt(accountId)}`;
+    if (accountResult.rows.length === 0) {
       return NextResponse.json({ message: 'Account not found' }, { status: 404 });
     }
+    const account = accountResult.rows[0];
 
     // Create campaign record
-    const campaigns = await getCampaigns();
-    const campaignId = Date.now().toString();
-    const campaign = {
-      id: campaignId,
-      accountId,
-      totalContacts: contacts.length,
-      sentCount: 0,
-      failedCount: 0,
-      status: 'in_progress',
-      createdAt: new Date().toISOString(),
-      startedAt: null,
-      completedAt: null,
-      messages: [] as any[],
-    };
+    const campaignResult = await sql`
+      INSERT INTO campaign_runs (name, account_id, template_name, template_body, total_contacts, status, filters_used, delay_before, delay_between, delay_unit, randomize_delay)
+      VALUES (${templateName || 'Campaign'}, ${parseInt(accountId)}, ${templateName || 'Unnamed'}, ${templateBody}, ${contacts.length}, 'in_progress', ${filtersUsed || ''}, ${delayBefore || 0}, ${delayBetween || 5}, ${delayUnit || 'seconds'}, ${randomizeDelay || false})
+      RETURNING id
+    `;
+    const campaignId = campaignResult.rows[0].id;
 
-    campaigns.push(campaign);
-    await saveCampaigns(campaigns);
+    // Send messages in background (don't block response)
+    (async () => {
+      try {
+        // Initial delay
+        if (delayBefore > 0) {
+          await new Promise(r => setTimeout(r, convertDelay(delayBefore, delayUnit || 'seconds')));
+        }
 
-    // Send messages with delays (async in background)
-    sendCampaignMessages(
-      contacts,
-      template,
-      account,
+        await sql`UPDATE campaign_runs SET started_at = NOW() WHERE id = ${campaignId}`;
+
+        let sentCount = 0;
+        let failedCount = 0;
+
+        for (let i = 0; i < contacts.length; i++) {
+          const contact = contacts[i];
+          const message = replaceVars(templateBody, contact);
+          const phone = contact.owner1_mobile || '';
+
+          const result = await sendToPhone(account, phone, message);
+
+          if (result.success) {
+            sentCount++;
+            await sql`
+              INSERT INTO campaign_messages (campaign_id, phone, unit_name, owner_name, message_text, status, sent_at)
+              VALUES (${campaignId}, ${phone}, ${contact.unit || ''}, ${contact.owner1_name || ''}, ${message}, 'sent', NOW())
+            `;
+          } else {
+            failedCount++;
+            await sql`
+              INSERT INTO campaign_messages (campaign_id, phone, unit_name, owner_name, message_text, status, error_message)
+              VALUES (${campaignId}, ${phone}, ${contact.unit || ''}, ${contact.owner1_name || ''}, ${message}, 'failed', ${result.error || ''})
+            `;
+          }
+
+          await sql`UPDATE campaign_runs SET sent_count = ${sentCount}, failed_count = ${failedCount} WHERE id = ${campaignId}`;
+
+          // Delay between messages
+          if (i < contacts.length - 1 && delayBetween > 0) {
+            const delay = getRandomDelay(convertDelay(delayBetween, delayUnit || 'seconds'), randomizeDelay);
+            await new Promise(r => setTimeout(r, delay));
+          }
+        }
+
+        await sql`UPDATE campaign_runs SET status = 'completed', completed_at = NOW(), sent_count = ${sentCount}, failed_count = ${failedCount} WHERE id = ${campaignId}`;
+      } catch (err: any) {
+        await sql`UPDATE campaign_runs SET status = 'failed' WHERE id = ${campaignId}`;
+      }
+    })();
+
+    return NextResponse.json({
+      message: 'Campaign started',
       campaignId,
-      delayBefore,
-      delayBetween,
-      delayUnit,
-      randomizeDelay
-    ).catch(error => console.error('Campaign send error:', error));
-
-    return NextResponse.json(
-      { message: 'Campaign started', campaignId, totalContacts: contacts.length },
-      { status: 200 }
-    );
+      totalContacts: contacts.length,
+    }, { status: 200 });
   } catch (error: any) {
-    return NextResponse.json(
-      { message: `Failed to start campaign: ${error.message}` },
-      { status: 500 }
-    );
+    return NextResponse.json({ message: 'Failed: ' + error.message }, { status: 500 });
   }
 }
 
-async function sendCampaignMessages(
-  contacts: any[],
-  template: string,
-  account: any,
-  campaignId: string,
-  delayBefore: number,
-  delayBetween: number,
-  delayUnit: string,
-  randomizeDelay: boolean
-) {
-  const campaigns = await getCampaigns();
-  const campaign = campaigns.find((c: any) => c.id === campaignId);
-
-  if (!campaign) return;
-
-  // Wait before starting
-  const beforeDelay = convertDelay(delayBefore, delayUnit);
-  await new Promise(resolve => setTimeout(resolve, beforeDelay));
-
-  campaign.startedAt = new Date().toISOString();
-
-  // Send to each contact
-  for (const contact of contacts) {
-    try {
-      const message = await replaceVariables(template, contact);
-      const phone = (contact.owner1_mobile || '').replace(/[^0-9+]/g, '');
-
-      if (!phone) {
-        campaign.failedCount++;
-        continue;
-      }
-
-      // Send via WhatsApp API
-      const response = await fetch(
-        `https://graph.instagram.com/v18.0/${account.phoneNumberId}/messages`,
-        {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${account.accessToken}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            messaging_product: 'whatsapp',
-            recipient_type: 'individual',
-            to: phone,
-            type: 'text',
-            text: { body: message },
-          }),
-        }
-      );
-
-      if (response.ok) {
-        campaign.sentCount++;
-        campaign.messages.push({
-          phone,
-          unit: contact.unit,
-          status: 'sent',
-          sentAt: new Date().toISOString(),
-        });
-      } else {
-        campaign.failedCount++;
-        campaign.messages.push({
-          phone,
-          unit: contact.unit,
-          status: 'failed',
-          failedAt: new Date().toISOString(),
-        });
-      }
-    } catch (error) {
-      campaign.failedCount++;
-    }
-
-    // Wait between messages
-    const betweenDelay = convertDelay(delayBetween, delayUnit);
-    const randomizedDelay = getRandomDelay(betweenDelay, randomizeDelay);
-    await new Promise(resolve => setTimeout(resolve, randomizedDelay));
+export async function GET() {
+  try {
+    const result = await sql`SELECT * FROM campaign_runs ORDER BY created_at DESC LIMIT 50`;
+    return NextResponse.json({ campaigns: result.rows }, { status: 200 });
+  } catch (error: any) {
+    return NextResponse.json({ message: 'Failed: ' + error.message }, { status: 500 });
   }
-
-  campaign.status = 'completed';
-  campaign.completedAt = new Date().toISOString();
-
-  await saveCampaigns(campaigns);
 }

@@ -100,6 +100,34 @@ export default function CampaignsPage() {
     zoha_feedback_3: [] as string[],
   });
 
+  // Delay settings
+  const [delayBefore, setDelayBefore] = useState(0);
+  const [delayBetween, setDelayBetween] = useState(5);
+  const [delayUnit, setDelayUnit] = useState('seconds');
+  const [randomizeDelay, setRandomizeDelay] = useState(false);
+
+  // Account selection
+  const [accounts, setAccounts] = useState<any[]>([]);
+  const [selectedAccountId, setSelectedAccountId] = useState('');
+  const [accountsLoading, setAccountsLoading] = useState(false);
+
+  // Test message
+  const [testSending, setTestSending] = useState(false);
+  const [testStatus, setTestStatus] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+
+  // Campaign sending
+  const [sending, setSending] = useState(false);
+  const [sendStatus, setSendStatus] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+
+  // Campaign history
+  const [campaignHistory, setCampaignHistory] = useState<any[]>([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
+
+  // Schedule
+  const [scheduleEnabled, setScheduleEnabled] = useState(false);
+  const [scheduledDate, setScheduledDate] = useState('');
+  const [scheduledTime, setScheduledTime] = useState('');
+
   // Load sheets
   useEffect(() => {
     const loadSheets = async () => {
@@ -145,6 +173,39 @@ export default function CampaignsPage() {
       }
     };
     loadTemplates();
+  }, []);
+
+  // Load accounts
+  useEffect(() => {
+    const loadAccounts = async () => {
+      setAccountsLoading(true);
+      try {
+        const res = await fetch('/api/accounts');
+        const data = await res.json();
+        if (data.accounts) {
+          setAccounts(data.accounts);
+          if (data.accounts.length > 0) {
+            setSelectedAccountId(String(data.accounts[0].id));
+          }
+        }
+      } catch {}
+      setAccountsLoading(false);
+    };
+    loadAccounts();
+  }, []);
+
+  // Load campaign history
+  useEffect(() => {
+    const loadHistory = async () => {
+      setHistoryLoading(true);
+      try {
+        const res = await fetch('/api/send-campaign');
+        const data = await res.json();
+        if (data.campaigns) setCampaignHistory(data.campaigns);
+      } catch {}
+      setHistoryLoading(false);
+    };
+    loadHistory();
   }, []);
 
   // Load contacts from sheet
@@ -282,6 +343,94 @@ export default function CampaignsPage() {
     replaced = replaced.replace(/{project_name_en}/g, isTest ? "[Project]" : "[Project]");
     replaced = replaced.replace(/{phone}/g, isTest ? testPhone || "[Phone]" : contact?.owner1_mobile || "[Phone]");
     return replaced;
+  };
+
+  // Send test message
+  const handleSendTest = async () => {
+    if (!testPhone || !selectedTemplate) return;
+    setTestSending(true);
+    setTestStatus(null);
+    try {
+      const selectedTemplateData = templates.find(t => t.id === selectedTemplate);
+      if (!selectedTemplateData) throw new Error('No template selected');
+      
+      const selectedContactObjects = filteredContacts.filter(c => selectedContacts.has(c.rowIndex));
+      const sampleContact = selectedContactObjects[0] || null;
+      const message = sampleContact 
+        ? replaceTemplateVariables(selectedTemplateData.body, sampleContact, false)
+        : selectedTemplateData.body;
+      
+      const res = await fetch('/api/send-test-message', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          phone: testPhone,
+          message,
+          accountId: selectedAccountId,
+        }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setTestStatus({ type: 'success', message: '✅ Test message sent! Check your phone.' });
+      } else {
+        setTestStatus({ type: 'error', message: '❌ Failed: ' + (data.message || 'Unknown error') });
+      }
+    } catch (err: any) {
+      setTestStatus({ type: 'error', message: '❌ Error: ' + err.message });
+    }
+    setTestSending(false);
+  };
+
+  // Calculate estimated duration
+  const calculateEstimatedDuration = () => {
+    const count = selectedContacts.size;
+    if (count === 0) return 'No contacts selected';
+    const beforeMs = delayBefore * (delayUnit === 'minutes' ? 60 : delayUnit === 'hours' ? 3600 : 1);
+    const betweenMs = delayBetween * (count - 1) * (delayUnit === 'minutes' ? 60 : delayUnit === 'hours' ? 3600 : 1);
+    const totalSeconds = beforeMs + betweenMs;
+    if (totalSeconds < 60) return `~${totalSeconds} seconds`;
+    if (totalSeconds < 3600) return `~${Math.ceil(totalSeconds / 60)} minutes`;
+    return `~${(totalSeconds / 3600).toFixed(1)} hours`;
+  };
+
+  // Send campaign
+  const handleSendCampaign = async () => {
+    if (!selectedAccountId || !selectedTemplate || selectedContacts.size === 0) return;
+    setSending(true);
+    setSendStatus(null);
+    try {
+      const selectedTemplateData = templates.find(t => t.id === selectedTemplate);
+      const selectedContactObjects = filteredContacts.filter(c => selectedContacts.has(c.rowIndex));
+      
+      const res = await fetch('/api/send-campaign', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contacts: selectedContactObjects,
+          templateName: selectedTemplateData?.name || 'Campaign',
+          templateBody: selectedTemplateData?.body || '',
+          accountId: selectedAccountId,
+          delayBefore,
+          delayBetween,
+          delayUnit,
+          randomizeDelay,
+          filtersUsed: JSON.stringify(filters),
+        }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setSendStatus({ type: 'success', message: `✅ Campaign started! ${data.totalContacts} messages queued. Campaign ID: ${data.campaignId}` });
+        // Refresh history
+        const histRes = await fetch('/api/send-campaign');
+        const histData = await histRes.json();
+        if (histData.campaigns) setCampaignHistory(histData.campaigns);
+      } else {
+        setSendStatus({ type: 'error', message: '❌ Failed: ' + (data.message || 'Unknown error') });
+      }
+    } catch (err: any) {
+      setSendStatus({ type: 'error', message: '❌ Error: ' + err.message });
+    }
+    setSending(false);
   };
 
   // Label-value pair component
@@ -854,6 +1003,27 @@ export default function CampaignsPage() {
                   placeholder="Enter phone number to preview with placeholders"
                   className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
                 />
+                {testPhone && (
+                  <div className="mt-3 flex items-center gap-3">
+                    <button
+                      onClick={handleSendTest}
+                      disabled={testSending || !selectedAccountId}
+                      className="px-6 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white rounded-lg transition font-bold text-sm"
+                    >
+                      {testSending ? '⏳ Sending...' : '📤 Send Test Message'}
+                    </button>
+                    {!selectedAccountId && (
+                      <p className="text-sm text-red-500">No WhatsApp account configured. Go to Accounts page first.</p>
+                    )}
+                  </div>
+                )}
+                {testStatus && (
+                  <div className={`mt-3 p-3 rounded-lg text-sm font-medium ${
+                    testStatus.type === 'success' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
+                  }`}>
+                    {testStatus.message}
+                  </div>
+                )}
               </div>
             )}
 
@@ -914,12 +1084,111 @@ export default function CampaignsPage() {
       <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 p-4 sm:p-6">
         <div className="max-w-4xl mx-auto">
           <h1 className="text-3xl font-bold text-gray-900 mb-2">🚀 Campaign Manager</h1>
-          <p className="text-gray-600 mb-6">Step 3: Set Delays</p>
+          <p className="text-gray-600 mb-6">Step 3: Configure Delays & Schedule</p>
 
-          <div className="bg-white rounded-lg shadow-md p-6">
-            <p className="text-gray-600 mb-4">Configure delay settings for your campaign</p>
-            <p className="text-gray-500 text-sm mb-6">(Coming soon)</p>
+          <div className="bg-white rounded-lg shadow-md p-6 space-y-6">
+            {/* Delay Before */}
+            <div>
+              <label className="block text-lg font-bold text-gray-900 mb-2">⏱️ Initial Delay (before sending starts)</label>
+              <p className="text-sm text-gray-500 mb-3">Wait this long before sending the first message</p>
+              <div className="flex gap-3">
+                <input
+                  type="number"
+                  min={0}
+                  value={delayBefore}
+                  onChange={(e) => setDelayBefore(parseInt(e.target.value) || 0)}
+                  className="w-32 px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 font-medium"
+                />
+                <select
+                  value={delayUnit}
+                  onChange={(e) => setDelayUnit(e.target.value)}
+                  className="px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 font-medium"
+                >
+                  <option value="seconds">Seconds</option>
+                  <option value="minutes">Minutes</option>
+                  <option value="hours">Hours</option>
+                </select>
+              </div>
+            </div>
 
+            {/* Delay Between */}
+            <div>
+              <label className="block text-lg font-bold text-gray-900 mb-2">⏳ Delay Between Messages</label>
+              <p className="text-sm text-gray-500 mb-3">Wait this long between each message to avoid detection</p>
+              <div className="flex gap-3">
+                <input
+                  type="number"
+                  min={0}
+                  value={delayBetween}
+                  onChange={(e) => setDelayBetween(parseInt(e.target.value) || 0)}
+                  className="w-32 px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 font-medium"
+                />
+                <span className="flex items-center text-gray-600 font-medium">{delayUnit}</span>
+              </div>
+            </div>
+
+            {/* Randomize */}
+            <div className="flex items-center gap-3">
+              <input
+                type="checkbox"
+                checked={randomizeDelay}
+                onChange={(e) => setRandomizeDelay(e.target.checked)}
+                className="w-5 h-5 cursor-pointer"
+              />
+              <div>
+                <label className="font-bold text-gray-900">🔀 Randomize Delays</label>
+                <p className="text-sm text-gray-500">Adds ±20% variation to delay times to appear more natural</p>
+              </div>
+            </div>
+
+            {/* Schedule Option */}
+            <div className="border-t pt-6">
+              <div className="flex items-center gap-3 mb-4">
+                <input
+                  type="checkbox"
+                  checked={scheduleEnabled}
+                  onChange={(e) => setScheduleEnabled(e.target.checked)}
+                  className="w-5 h-5 cursor-pointer"
+                />
+                <div>
+                  <label className="font-bold text-gray-900">📅 Schedule Campaign</label>
+                  <p className="text-sm text-gray-500">Schedule this campaign to run at a specific date and time</p>
+                </div>
+              </div>
+              {scheduleEnabled && (
+                <div className="flex gap-3 ml-8">
+                  <input
+                    type="date"
+                    value={scheduledDate}
+                    onChange={(e) => setScheduledDate(e.target.value)}
+                    className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                  />
+                  <input
+                    type="time"
+                    value={scheduledTime}
+                    onChange={(e) => setScheduledTime(e.target.value)}
+                    className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+              )}
+            </div>
+
+            {/* Estimated Duration */}
+            <div className="bg-blue-50 p-4 rounded-lg">
+              <p className="font-bold text-gray-900 mb-2">📊 Campaign Summary</p>
+              <div className="space-y-1 text-sm">
+                <p>📧 Messages to send: <span className="font-bold">{selectedContacts.size}</span></p>
+                <p>⏱️ Initial delay: <span className="font-bold">{delayBefore} {delayUnit}</span></p>
+                <p>⏳ Between messages: <span className="font-bold">{delayBetween} {delayUnit}</span></p>
+                {randomizeDelay && <p>🔀 Randomization: <span className="font-bold">±20%</span></p>}
+                <p>⏰ Estimated duration: <span className="font-bold">{calculateEstimatedDuration()}</span></p>
+                {scheduleEnabled && scheduledDate && (
+                  <p>📅 Scheduled for: <span className="font-bold">{scheduledDate} {scheduledTime}</span></p>
+                )}
+              </div>
+            </div>
+
+            {/* Buttons */}
             <div className="flex gap-4">
               <button
                 onClick={() => setStep(2)}
@@ -941,16 +1210,94 @@ export default function CampaignsPage() {
   }
 
   // STEP 4: Review & Send
+  const selectedContactObjects = filteredContacts.filter((c) => selectedContacts.has(c.rowIndex));
+  const selectedTemplateData = templates.find((t) => t.id === selectedTemplate);
+  const selectedAccountData = accounts.find((a: any) => String(a.id) === selectedAccountId);
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 p-4 sm:p-6">
       <div className="max-w-4xl mx-auto">
         <h1 className="text-3xl font-bold text-gray-900 mb-2">🚀 Campaign Manager</h1>
         <p className="text-gray-600 mb-6">Step 4: Review & Send</p>
 
-        <div className="bg-white rounded-lg shadow-md p-6">
-          <p className="text-gray-600 mb-4">Review your campaign before sending</p>
-          <p className="text-gray-500 text-sm mb-6">(Coming soon)</p>
+        <div className="bg-white rounded-lg shadow-md p-6 space-y-6">
+          {/* Campaign Summary */}
+          <div className="bg-gradient-to-r from-blue-50 to-indigo-50 p-6 rounded-lg border border-blue-200">
+            <h3 className="text-xl font-bold text-gray-900 mb-4">📋 Campaign Summary</h3>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <p className="text-sm text-gray-500">Contacts</p>
+                <p className="text-2xl font-bold text-blue-600">{selectedContacts.size}</p>
+              </div>
+              <div>
+                <p className="text-sm text-gray-500">Template</p>
+                <p className="font-bold text-gray-900">{selectedTemplateData?.name || 'None'}</p>
+              </div>
+              <div>
+                <p className="text-sm text-gray-500">Delay Between</p>
+                <p className="font-bold text-gray-900">{delayBetween} {delayUnit} {randomizeDelay ? '(±20%)' : ''}</p>
+              </div>
+              <div>
+                <p className="text-sm text-gray-500">Est. Duration</p>
+                <p className="font-bold text-gray-900">{calculateEstimatedDuration()}</p>
+              </div>
+            </div>
+          </div>
 
+          {/* Account Selection */}
+          <div>
+            <label className="block text-lg font-bold text-gray-900 mb-3">📱 Send From Account</label>
+            {accounts.length === 0 ? (
+              <div className="bg-yellow-50 border border-yellow-200 p-4 rounded-lg">
+                <p className="text-yellow-800 font-medium">⚠️ No WhatsApp accounts configured.</p>
+                <p className="text-yellow-600 text-sm mt-1">Go to the <a href="/accounts" className="underline font-bold">Accounts</a> page to add one.</p>
+              </div>
+            ) : (
+              <select
+                value={selectedAccountId}
+                onChange={(e) => setSelectedAccountId(e.target.value)}
+                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 font-medium"
+              >
+                {accounts.map((acc: any) => (
+                  <option key={acc.id} value={String(acc.id)}>
+                    {acc.name} ({acc.phone || 'No phone'}) - {acc.status}
+                  </option>
+                ))}
+              </select>
+            )}
+          </div>
+
+          {/* Template Preview */}
+          <div className="border-2 border-blue-200 bg-blue-50 p-4 rounded-lg">
+            <h3 className="font-bold text-gray-900 mb-2">📝 Message Preview (First Contact)</h3>
+            <div className="bg-white p-4 rounded border border-gray-300 whitespace-pre-wrap text-gray-900 font-mono text-sm">
+              {selectedTemplateData && selectedContactObjects.length > 0
+                ? replaceTemplateVariables(selectedTemplateData.body, selectedContactObjects[0], false)
+                : selectedTemplateData?.body || 'No template selected'}
+            </div>
+          </div>
+
+          {/* Warning */}
+          <div className="bg-orange-50 border border-orange-200 p-4 rounded-lg">
+            <p className="text-orange-800 font-medium">⚠️ Important Notes:</p>
+            <ul className="text-orange-700 text-sm mt-2 list-disc list-inside space-y-1">
+              <li>Messages will be sent to {selectedContacts.size} contacts</li>
+              <li>Each message will have variables replaced with actual contact data</li>
+              <li>Sending too many messages too quickly may trigger WhatsApp restrictions</li>
+              <li>Make sure you&apos;ve tested with a single number first</li>
+            </ul>
+          </div>
+
+          {/* Send Status */}
+          {sendStatus && (
+            <div className={`p-4 rounded-lg font-medium ${
+              sendStatus.type === 'success' ? 'bg-green-100 text-green-800 border border-green-200' : 'bg-red-100 text-red-800 border border-red-200'
+            }`}>
+              {sendStatus.message}
+            </div>
+          )}
+
+          {/* Buttons */}
           <div className="flex gap-4">
             <button
               onClick={() => setStep(3)}
@@ -959,13 +1306,46 @@ export default function CampaignsPage() {
               Back
             </button>
             <button
-              onClick={() => alert("Campaign sent successfully!")}
-              className="flex-1 px-6 py-3 bg-green-600 hover:bg-green-700 text-white rounded-lg transition font-bold"
+              onClick={handleSendCampaign}
+              disabled={sending || !selectedAccountId || selectedContacts.size === 0}
+              className="flex-1 px-6 py-3 bg-green-600 hover:bg-green-700 disabled:bg-gray-400 text-white rounded-lg transition font-bold text-lg"
             >
-              Send Campaign
+              {sending ? '⏳ Sending Campaign...' : `🚀 Send to ${selectedContacts.size} Contacts`}
             </button>
           </div>
         </div>
+
+        {/* Campaign History */}
+        {campaignHistory.length > 0 && (
+          <div className="bg-white rounded-lg shadow-md p-6 mt-6">
+            <h2 className="text-xl font-bold text-gray-900 mb-4">📊 Campaign History</h2>
+            <div className="space-y-3">
+              {campaignHistory.map((campaign: any) => (
+                <div key={campaign.id} className="border border-gray-200 rounded-lg p-4">
+                  <div className="flex justify-between items-start">
+                    <div>
+                      <p className="font-bold text-gray-900">{campaign.template_name}</p>
+                      <p className="text-sm text-gray-500">{new Date(campaign.created_at).toLocaleString()}</p>
+                    </div>
+                    <span className={`px-3 py-1 rounded-full text-xs font-bold ${
+                      campaign.status === 'completed' ? 'bg-green-100 text-green-800' :
+                      campaign.status === 'in_progress' ? 'bg-blue-100 text-blue-800' :
+                      campaign.status === 'failed' ? 'bg-red-100 text-red-800' :
+                      'bg-gray-100 text-gray-800'
+                    }`}>
+                      {campaign.status}
+                    </span>
+                  </div>
+                  <div className="flex gap-6 mt-2 text-sm">
+                    <span>📧 Total: <b>{campaign.total_contacts}</b></span>
+                    <span className="text-green-600">✅ Sent: <b>{campaign.sent_count}</b></span>
+                    <span className="text-red-600">❌ Failed: <b>{campaign.failed_count}</b></span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

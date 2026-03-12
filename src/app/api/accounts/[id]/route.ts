@@ -1,59 +1,51 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { promises as fs } from 'fs';
-import path from 'path';
-
-const ACCOUNTS_FILE = path.join(process.cwd(), 'data', 'accounts.json');
-
-async function ensureAccountsFile() {
-  try {
-    await fs.access(ACCOUNTS_FILE);
-  } catch {
-    const dir = path.dirname(ACCOUNTS_FILE);
-    await fs.mkdir(dir, { recursive: true });
-    await fs.writeFile(ACCOUNTS_FILE, JSON.stringify([], null, 2));
-  }
-}
-
-async function getAccounts() {
-  await ensureAccountsFile();
-  const data = await fs.readFile(ACCOUNTS_FILE, 'utf-8');
-  return JSON.parse(data);
-}
-
-async function saveAccounts(accounts: any[]) {
-  await ensureAccountsFile();
-  await fs.writeFile(ACCOUNTS_FILE, JSON.stringify(accounts, null, 2));
-}
+import { sql } from '@/lib/db';
 
 export async function PUT(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const { id } = await params;
   try {
-    const { id } = await params;
     const body = await request.json();
-    const { name, phone, accessToken, businessAccountId, phoneNumberId } = body;
-
-    const accounts = await getAccounts();
-    const index = accounts.findIndex((a: any) => a.id === id);
-
-    if (index === -1) {
+    const { name, phone, apiKey, accountType, businessAccountId, phoneNumberId, status } = body;
+    
+    if (apiKey) {
+      await sql`
+        UPDATE wa_accounts 
+        SET name = COALESCE(${name}, name), 
+            phone = COALESCE(${phone}, phone),
+            api_key = ${apiKey},
+            account_type = COALESCE(${accountType}, account_type),
+            business_account_id = COALESCE(${businessAccountId}, business_account_id),
+            phone_number_id = COALESCE(${phoneNumberId}, phone_number_id),
+            status = COALESCE(${status}, status)
+        WHERE id = ${parseInt(id)}
+      `;
+    } else {
+      await sql`
+        UPDATE wa_accounts 
+        SET name = COALESCE(${name}, name), 
+            phone = COALESCE(${phone}, phone),
+            account_type = COALESCE(${accountType}, account_type),
+            business_account_id = COALESCE(${businessAccountId}, business_account_id),
+            phone_number_id = COALESCE(${phoneNumberId}, phone_number_id),
+            status = COALESCE(${status}, status)
+        WHERE id = ${parseInt(id)}
+      `;
+    }
+    
+    const result = await sql`SELECT * FROM wa_accounts WHERE id = ${parseInt(id)}`;
+    if (result.rows.length === 0) {
       return NextResponse.json({ message: 'Account not found' }, { status: 404 });
     }
-
-    accounts[index] = {
-      ...accounts[index],
-      name,
-      phone,
-      accessToken,
-      businessAccountId,
-      phoneNumberId,
-    };
-
-    await saveAccounts(accounts);
-    return NextResponse.json({ account: accounts[index] }, { status: 200 });
-  } catch (error) {
-    return NextResponse.json({ message: 'Failed to update account' }, { status: 500 });
+    
+    const account = result.rows[0];
+    return NextResponse.json({ 
+      account: { ...account, api_key: '***' + account.api_key.slice(-4) }
+    });
+  } catch (error: any) {
+    return NextResponse.json({ message: 'Failed to update: ' + error.message }, { status: 500 });
   }
 }
 
@@ -61,18 +53,11 @@ export async function DELETE(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const { id } = await params;
   try {
-    const { id } = await params;
-    const accounts = await getAccounts();
-    const filtered = accounts.filter((a: any) => a.id !== id);
-
-    if (filtered.length === accounts.length) {
-      return NextResponse.json({ message: 'Account not found' }, { status: 404 });
-    }
-
-    await saveAccounts(filtered);
-    return NextResponse.json({ message: 'Account deleted' }, { status: 200 });
-  } catch (error) {
-    return NextResponse.json({ message: 'Failed to delete account' }, { status: 500 });
+    await sql`DELETE FROM wa_accounts WHERE id = ${parseInt(id)}`;
+    return NextResponse.json({ message: 'Account deleted' });
+  } catch (error: any) {
+    return NextResponse.json({ message: 'Failed to delete: ' + error.message }, { status: 500 });
   }
 }
