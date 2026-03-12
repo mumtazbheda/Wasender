@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 
 interface Campaign {
@@ -39,7 +39,7 @@ interface CampaignMessage {
   created_at: string;
 }
 
-export default function CampaignHistoryPage() {
+function CampaignHistoryContent() {
   const searchParams = useSearchParams();
   const detailId = searchParams.get("id");
   
@@ -364,5 +364,13 @@ export default function CampaignHistoryPage() {
         )}
       </div>
     </div>
+  );
+}
+
+export default function CampaignHistoryPage() {
+  return (
+    <Suspense fallback={<div className="p-6 text-center text-gray-400">Loading campaign history...</div>}>
+      <CampaignHistoryContent />
+    </Suspense>
   );
 }
