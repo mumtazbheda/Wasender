@@ -29,6 +29,9 @@ interface Contact {
   ahmed_feedback_1: string;
   ahmed_feedback_2: string;
   ahmed_feedback_3: string;
+  zoha_email_feedback_1: string;
+  zoha_email_feedback_2: string;
+  zoha_email_feedback_3: string;
   status: string;
   latest_transaction_date: string;
   latest_transaction_amount: string;
