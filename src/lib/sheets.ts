@@ -54,6 +54,16 @@ export interface Contact {
   available_from: string;
   view: string;
   project_name_en: string;
+  bayut_rent: string;
+  bayut_sale: string;
+  pf_rent: string;
+  pf_sale: string;
+  bayut_rent_prices: string;
+  bayut_sale_prices: string;
+  pf_rent_prices: string;
+  pf_sale_prices: string;
+  bayut_links: string;
+  pf_links: string;
 }
 
 function getSheetsClient(accessToken: string) {
@@ -120,6 +130,16 @@ function detectColumns(headers: string[]) {
     available_from: findByName(["available"]),
     view: findByName(["view"]),
     project_name_en: findByName(["project_name_en", "project name"]),
+    bayut_rent: findByName(["bayut rent"]),
+    bayut_sale: findByName(["bayut sale"]),
+    pf_rent: findByName(["pf rent"]),
+    pf_sale: findByName(["pf sale"]),
+    bayut_rent_prices: findByName(["bayut rent price"]),
+    bayut_sale_prices: findByName(["bayut sale price"]),
+    pf_rent_prices: findByName(["pf rent price"]),
+    pf_sale_prices: findByName(["pf sale price"]),
+    bayut_links: findByName(["bayut link"]),
+    pf_links: findByName(["pf link"]),
   };
 }
 
@@ -231,6 +251,16 @@ export async function fetchContactData(
       available_from: getStringValue(columnIndices.available_from),
       view: getStringValue(columnIndices.view),
       project_name_en: getStringValue(columnIndices.project_name_en),
+      bayut_rent: getStringValue(columnIndices.bayut_rent),
+      bayut_sale: getStringValue(columnIndices.bayut_sale),
+      pf_rent: getStringValue(columnIndices.pf_rent),
+      pf_sale: getStringValue(columnIndices.pf_sale),
+      bayut_rent_prices: getStringValue(columnIndices.bayut_rent_prices),
+      bayut_sale_prices: getStringValue(columnIndices.bayut_sale_prices),
+      pf_rent_prices: getStringValue(columnIndices.pf_rent_prices),
+      pf_sale_prices: getStringValue(columnIndices.pf_sale_prices),
+      bayut_links: getStringValue(columnIndices.bayut_links),
+      pf_links: getStringValue(columnIndices.pf_links),
     });
   }
 

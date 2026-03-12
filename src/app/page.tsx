@@ -298,6 +298,12 @@ export default function Dashboard() {
                   >
                     📝 Message Templates
                   </a>
+                  <a
+                    href="/send-message"
+                    className="block w-full text-left px-4 py-3 bg-teal-50 hover:bg-teal-100 rounded-lg text-teal-700 transition-colors font-medium"
+                  >
+                    💬 Send a Message
+                  </a>
                 </div>
               </div>
 

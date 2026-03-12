@@ -63,6 +63,16 @@ interface Template {
 type SortOrder = "none" | "low-to-high" | "high-to-low";
 type CampaignStep = 1 | 2 | 3 | 4;
 
+
+function isUAEPhone(phone: string): boolean {
+  if (!phone) return false;
+  const cleaned = phone.replace(/[^0-9]/g, '');
+  if (cleaned.startsWith('971')) return true;
+  if (cleaned.startsWith('05') && cleaned.length === 10) return true;
+  if (cleaned.startsWith('5') && cleaned.length === 9) return true;
+  return false;
+}
+
 export default function CampaignsPage() {
   const { data: session, status } = useSession();
   const [step, setStep] = useState<CampaignStep>(1);
@@ -314,7 +324,16 @@ export default function CampaignsPage() {
         (!filters.owner3Mobile ||
           (filters.owner3Mobile === 'blank' && (!contact.owner3_mobile || String(contact.owner3_mobile).trim() === '')) ||
           (filters.owner3Mobile === 'zero' && String(contact.owner3_mobile || '').trim() === '0') ||
-          (filters.owner3Mobile === 'nonblank' && contact.owner3_mobile && String(contact.owner3_mobile).trim() !== '' && String(contact.owner3_mobile).trim() !== '0'));
+          (filters.owner3Mobile === 'nonblank' && contact.owner3_mobile && String(contact.owner3_mobile).trim() !== '' && String(contact.owner3_mobile).trim() !== '0')) &&
+        (!filters.owner1CountryCode ||
+          (filters.owner1CountryCode === 'uae' && isUAEPhone(contact.owner1_mobile)) ||
+          (filters.owner1CountryCode === 'nonuae' && contact.owner1_mobile && String(contact.owner1_mobile).trim() !== '' && !isUAEPhone(contact.owner1_mobile))) &&
+        (!filters.owner2CountryCode ||
+          (filters.owner2CountryCode === 'uae' && isUAEPhone(contact.owner2_mobile)) ||
+          (filters.owner2CountryCode === 'nonuae' && contact.owner2_mobile && String(contact.owner2_mobile).trim() !== '' && !isUAEPhone(contact.owner2_mobile))) &&
+        (!filters.owner3CountryCode ||
+          (filters.owner3CountryCode === 'uae' && isUAEPhone(contact.owner3_mobile)) ||
+          (filters.owner3CountryCode === 'nonuae' && contact.owner3_mobile && String(contact.owner3_mobile).trim() !== '' && !isUAEPhone(contact.owner3_mobile)));
 
       return matchSearch && matchFilters;
     });
@@ -1062,6 +1081,18 @@ export default function CampaignsPage() {
                       <div className="bg-pink-50 p-3 rounded-lg">
                         <span className="text-gray-500 text-sm">Zoha Feedback 3:</span>
                         <p className="font-bold text-gray-900">{selectedContact.zoha_feedback_3 || '—'}</p>
+                      </div>
+                      <div className="bg-indigo-50 p-3 rounded-lg">
+                        <span className="text-gray-500 text-sm">Zoha Email Feedback 1:</span>
+                        <p className="font-bold text-gray-900">{selectedContact.zoha_email_feedback_1 || '—'}</p>
+                      </div>
+                      <div className="bg-indigo-50 p-3 rounded-lg">
+                        <span className="text-gray-500 text-sm">Zoha Email Feedback 2:</span>
+                        <p className="font-bold text-gray-900">{selectedContact.zoha_email_feedback_2 || '—'}</p>
+                      </div>
+                      <div className="bg-indigo-50 p-3 rounded-lg">
+                        <span className="text-gray-500 text-sm">Zoha Email Feedback 3:</span>
+                        <p className="font-bold text-gray-900">{selectedContact.zoha_email_feedback_3 || '—'}</p>
                       </div>
                     </div>
                   </section>

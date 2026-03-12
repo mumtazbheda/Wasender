@@ -221,6 +221,16 @@ const EDIT_FIELD_GROUPS = [
   },
 ];
 
+
+function isUAEPhone(phone: string): boolean {
+  if (!phone) return false;
+  const cleaned = phone.replace(/[^0-9]/g, '');
+  if (cleaned.startsWith('971')) return true;
+  if (cleaned.startsWith('05') && cleaned.length === 10) return true;
+  if (cleaned.startsWith('5') && cleaned.length === 9) return true;
+  return false;
+}
+
 export default function ContactsPage() {
   const { data: session, status } = useSession();
   const [selectedSheet, setSelectedSheet] = useState<string>("");
@@ -509,7 +519,16 @@ export default function ContactsPage() {
         (!filters.owner3Mobile ||
           (filters.owner3Mobile === 'blank' && (!contact.owner3_mobile || String(contact.owner3_mobile).trim() === '')) ||
           (filters.owner3Mobile === 'zero' && String(contact.owner3_mobile || '').trim() === '0') ||
-          (filters.owner3Mobile === 'nonblank' && contact.owner3_mobile && String(contact.owner3_mobile).trim() !== '' && String(contact.owner3_mobile).trim() !== '0'));
+          (filters.owner3Mobile === 'nonblank' && contact.owner3_mobile && String(contact.owner3_mobile).trim() !== '' && String(contact.owner3_mobile).trim() !== '0')) &&
+        (!filters.owner1CountryCode ||
+          (filters.owner1CountryCode === 'uae' && isUAEPhone(contact.owner1_mobile)) ||
+          (filters.owner1CountryCode === 'nonuae' && contact.owner1_mobile && String(contact.owner1_mobile).trim() !== '' && !isUAEPhone(contact.owner1_mobile))) &&
+        (!filters.owner2CountryCode ||
+          (filters.owner2CountryCode === 'uae' && isUAEPhone(contact.owner2_mobile)) ||
+          (filters.owner2CountryCode === 'nonuae' && contact.owner2_mobile && String(contact.owner2_mobile).trim() !== '' && !isUAEPhone(contact.owner2_mobile))) &&
+        (!filters.owner3CountryCode ||
+          (filters.owner3CountryCode === 'uae' && isUAEPhone(contact.owner3_mobile)) ||
+          (filters.owner3CountryCode === 'nonuae' && contact.owner3_mobile && String(contact.owner3_mobile).trim() !== '' && !isUAEPhone(contact.owner3_mobile)));
 
       return matchSearch && matchFilters;
     });
@@ -667,6 +686,16 @@ export default function ContactsPage() {
     ) : (
       <span className="text-gray-400">Not provided</span>
     );
+
+  const ViewSection = ({ title, isOpen, onToggle, children }: { title: string; isOpen: boolean; onToggle: () => void; children: React.ReactNode }) => (
+    <section className="border border-gray-200 rounded-lg overflow-hidden">
+      <button onClick={onToggle} className="w-full flex justify-between items-center p-4 bg-gray-50 hover:bg-gray-100 transition">
+        <h3 className="text-lg font-bold text-gray-900">{title}</h3>
+        <span className="text-gray-500 text-xl">{isOpen ? '▼' : '▶'}</span>
+      </button>
+      {isOpen && <div className="p-4 space-y-3">{children}</div>}
+    </section>
+  );
 
   // ─── Auth guards ───────────────────────────────────────────────────────────
   if (status === "loading") {
@@ -1285,293 +1314,101 @@ export default function ContactsPage() {
         {selectedContact && !showWhatsAppModal && !editingContact && (
           <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
             <div className="bg-white rounded-xl shadow-2xl max-w-3xl w-full max-h-[90vh] overflow-y-auto">
-              {/* Modal Header */}
-              <div className="sticky top-0 bg-gradient-to-r from-blue-600 to-blue-700 text-white p-6 flex justify-between items-center">
+              <div className="sticky top-0 bg-gradient-to-r from-blue-600 to-blue-700 text-white p-6 flex justify-between items-center z-10">
                 <div>
-                  <h2 className="text-3xl font-bold">
-                    {selectedContact.unit}
-                  </h2>
-                  <p className="text-blue-100 text-sm mt-1">
-                    {selectedContact.owner1_name || "No owner"}
-                  </p>
+                  <h2 className="text-3xl font-bold">{selectedContact.unit}</h2>
+                  <p className="text-blue-100 text-sm mt-1">{selectedContact.owner1_name || "No owner"}</p>
                 </div>
-                <button
-                  onClick={() => setSelectedContact(null)}
-                  className="text-white hover:bg-white hover:bg-opacity-20 rounded-full p-2 transition"
-                >
-                  ✕
-                </button>
+                <button onClick={() => setSelectedContact(null)} className="text-white hover:bg-white hover:bg-opacity-20 rounded-full p-2 transition">✕</button>
               </div>
-
-              {/* Modal Content */}
-              <div className="p-8 space-y-8">
-                {/* Property Details */}
-                <section>
-                  <h3 className="text-xl font-bold text-gray-900 mb-4 pb-2 border-b-2 border-blue-600">
-                    🏠 Property Details
-                  </h3>
-                  <div className="space-y-3">
-                    <LabelValue
-                      label="Unit Number"
-                      value={selectedContact.unit}
-                    />
-                    <LabelValue
-                      label="Rooms"
-                      value={selectedContact.rooms_en}
-                    />
-                    <LabelValue
-                      label="Property Size"
-                      value={
-                        selectedContact.actual_area
-                          ? `${(selectedContact.actual_area * 10.764).toFixed(0)} sqft`
-                          : "N/A"
-                      }
-                    />
-                    <LabelValue
-                      label="Balcony Size"
-                      value={
-                        selectedContact.unit_balcony_area
-                          ? `${(selectedContact.unit_balcony_area * 10.764).toFixed(0)} sqft`
-                          : "N/A"
-                      }
-                    />
-                    <LabelValue
-                      label="Parking Number"
-                      value={selectedContact.unit_parking_number}
-                    />
-                    <LabelValue
-                      label="Furnishing"
-                      value={selectedContact.furnishing}
-                    />
-                  </div>
-                </section>
-
-                {/* Owner 1 */}
-                {selectedContact.owner1_name && (
-                  <section>
-                    <h3 className="text-xl font-bold text-gray-900 mb-4 pb-2 border-b-2 border-blue-600">
-                      👤 Owner 1
-                    </h3>
-                    <div className="bg-blue-50 p-4 rounded-lg space-y-3">
-                      <LabelValue
-                        label="Name"
-                        value={selectedContact.owner1_name}
-                      />
-                      <LabelValue
-                        label="Mobile"
-                        value={
-                          <PhoneLink phone={selectedContact.owner1_mobile} />
-                        }
-                      />
-                      <LabelValue
-                        label="Email"
-                        value={
-                          <span className="break-all">
-                            {selectedContact.owner1_email}
-                          </span>
-                        }
-                      />
-                    </div>
-                  </section>
-                )}
-
-                {/* Owner 2 */}
-                {selectedContact.owner2_name && (
-                  <section>
-                    <h3 className="text-xl font-bold text-gray-900 mb-4 pb-2 border-b-2 border-blue-600">
-                      👤 Owner 2
-                    </h3>
-                    <div className="bg-blue-50 p-4 rounded-lg space-y-3">
-                      <LabelValue
-                        label="Name"
-                        value={selectedContact.owner2_name}
-                      />
-                      <LabelValue
-                        label="Mobile"
-                        value={
-                          <PhoneLink phone={selectedContact.owner2_mobile} />
-                        }
-                      />
-                      <LabelValue
-                        label="Email"
-                        value={
-                          <span className="break-all">
-                            {selectedContact.owner2_email}
-                          </span>
-                        }
-                      />
-                    </div>
-                  </section>
-                )}
-
-                {/* Owner 3 */}
-                {selectedContact.owner3_name && (
-                  <section>
-                    <h3 className="text-xl font-bold text-gray-900 mb-4 pb-2 border-b-2 border-blue-600">
-                      👤 Owner 3
-                    </h3>
-                    <div className="bg-blue-50 p-4 rounded-lg space-y-3">
-                      <LabelValue
-                        label="Name"
-                        value={selectedContact.owner3_name}
-                      />
-                      <LabelValue
-                        label="Mobile"
-                        value={
-                          <PhoneLink phone={selectedContact.owner3_mobile} />
-                        }
-                      />
-                      <LabelValue
-                        label="Email"
-                        value={
-                          <span className="break-all">
-                            {selectedContact.owner3_email}
-                          </span>
-                        }
-                      />
-                    </div>
-                  </section>
-                )}
-
-                {/* Rental Details */}
-                <section>
-                  <h3 className="text-xl font-bold text-gray-900 mb-4 pb-2 border-b-2 border-blue-600">
-                    📅 Rental Details
-                  </h3>
-                  <div className="space-y-3">
-                    <LabelValue
-                      label="Rent Start Date"
-                      value={selectedContact.rent_start_date}
-                    />
-                    <LabelValue
-                      label="Rent End Date"
-                      value={selectedContact.rent_end_date}
-                    />
-                    <LabelValue
-                      label="Rent Price"
-                      value={selectedContact.rent_price}
-                    />
-                    <LabelValue
-                      label="Rent Duration"
-                      value={selectedContact.rent_duration}
-                    />
-                    <LabelValue
-                      label="Days Remaining"
-                      value={
-                        <span
-                          className={`font-bold ${
-                            calculateDaysRemaining(
-                              selectedContact.rent_end_date
-                            ).days < 30
-                              ? "text-red-600"
-                              : calculateDaysRemaining(
-                                  selectedContact.rent_end_date
-                                ).days < 90
-                              ? "text-yellow-600"
-                              : "text-green-600"
-                          }`}
-                        >
-                          {
-                            calculateDaysRemaining(
-                              selectedContact.rent_end_date
-                            ).text
-                          }
-                        </span>
-                      }
-                    />
-                    <LabelValue
-                      label="Listing Status"
-                      value={selectedContact.listing_status}
-                    />
-                    <LabelValue
-                      label="Rental Contract Status"
-                      value={selectedContact.rental_contract_status}
-                    />
-                  </div>
-                </section>
-
-                {/* Additional Info */}
-                <section>
-                  <h3 className="text-xl font-bold text-gray-900 mb-4 pb-2 border-b-2 border-blue-600">
-                    📋 Additional Info
-                  </h3>
-                  <div className="space-y-3">
-                    <LabelValue
-                      label="Purpose"
-                      value={selectedContact.purpose}
-                    />
-                    <LabelValue
-                      label="Status"
-                      value={selectedContact.status}
-                    />
-                    <LabelValue
-                      label="Occupancy Status"
-                      value={selectedContact.occupancy_status}
-                    />
-                  </div>
-                </section>
+              <div className="p-6 space-y-3">
+                <ViewSection title="🏠 Property Details" isOpen={openSections['prop'] !== false} onToggle={() => toggleSection('prop')}>
+                  <LabelValue label="Unit Number" value={selectedContact.unit} />
+                  <LabelValue label="Rooms" value={selectedContact.rooms_en} />
+                  <LabelValue label="Property Size" value={selectedContact.actual_area ? `${(selectedContact.actual_area * 10.764).toFixed(0)} sqft` : "—"} />
+                  <LabelValue label="Balcony Size" value={selectedContact.unit_balcony_area ? `${(selectedContact.unit_balcony_area * 10.764).toFixed(0)} sqft` : "—"} />
+                  <LabelValue label="Parking Number" value={selectedContact.unit_parking_number || "—"} />
+                  <LabelValue label="Project Name" value={selectedContact.project_name_en || "—"} />
+                </ViewSection>
+                <ViewSection title="👤 Owner 1" isOpen={openSections['o1'] !== false} onToggle={() => toggleSection('o1')}>
+                  <LabelValue label="Name" value={selectedContact.owner1_name || "—"} />
+                  <LabelValue label="Mobile" value={selectedContact.owner1_mobile ? <PhoneLink phone={selectedContact.owner1_mobile} /> : "—"} />
+                  <LabelValue label="Email" value={selectedContact.owner1_email ? <span className="break-all">{selectedContact.owner1_email}</span> : "—"} />
+                </ViewSection>
+                <ViewSection title="👤 Owner 2" isOpen={openSections['o2'] !== false} onToggle={() => toggleSection('o2')}>
+                  <LabelValue label="Name" value={selectedContact.owner2_name || "—"} />
+                  <LabelValue label="Mobile" value={selectedContact.owner2_mobile ? <PhoneLink phone={selectedContact.owner2_mobile} /> : "—"} />
+                  <LabelValue label="Email" value={selectedContact.owner2_email ? <span className="break-all">{selectedContact.owner2_email}</span> : "—"} />
+                </ViewSection>
+                <ViewSection title="👤 Owner 3" isOpen={openSections['o3'] !== false} onToggle={() => toggleSection('o3')}>
+                  <LabelValue label="Name" value={selectedContact.owner3_name || "—"} />
+                  <LabelValue label="Mobile" value={selectedContact.owner3_mobile ? <PhoneLink phone={selectedContact.owner3_mobile} /> : "—"} />
+                  <LabelValue label="Email" value={selectedContact.owner3_email ? <span className="break-all">{selectedContact.owner3_email}</span> : "—"} />
+                </ViewSection>
+                <ViewSection title="📅 Rental Details" isOpen={openSections['rent'] !== false} onToggle={() => toggleSection('rent')}>
+                  <LabelValue label="Rent Start Date" value={selectedContact.rent_start_date || "—"} />
+                  <LabelValue label="Rent End Date" value={selectedContact.rent_end_date || "—"} />
+                  <LabelValue label="Rent Price" value={selectedContact.rent_price || "—"} />
+                  <LabelValue label="Rent Duration" value={selectedContact.rent_duration || "—"} />
+                  <LabelValue label="Days Remaining" value={selectedContact.rent_end_date ? <span className={`font-bold ${calculateDaysRemaining(selectedContact.rent_end_date).days < 30 ? "text-red-600" : calculateDaysRemaining(selectedContact.rent_end_date).days < 90 ? "text-yellow-600" : "text-green-600"}`}>{calculateDaysRemaining(selectedContact.rent_end_date).text}</span> : "—"} />
+                  <LabelValue label="Rental Status Date" value={selectedContact.rental_status_date || "—"} />
+                  <LabelValue label="Rental Contract Status" value={selectedContact.rental_contract_status || "—"} />
+                  <LabelValue label="Rental Months Pending/Expired" value={selectedContact.rental_months_pending_expired || "—"} />
+                  <LabelValue label="Rental Cheques" value={selectedContact.rental_cheques || "—"} />
+                </ViewSection>
+                <ViewSection title="🏷️ Listing Info" isOpen={openSections['list'] !== false} onToggle={() => toggleSection('list')}>
+                  <LabelValue label="Bayut Rent" value={selectedContact.bayut_rent || "—"} />
+                  <LabelValue label="Bayut Sale" value={selectedContact.bayut_sale || "—"} />
+                  <LabelValue label="PF Rent" value={selectedContact.pf_rent || "—"} />
+                  <LabelValue label="PF Sale" value={selectedContact.pf_sale || "—"} />
+                  <LabelValue label="Bayut Rent Prices" value={selectedContact.bayut_rent_prices || "—"} />
+                  <LabelValue label="Bayut Sale Prices" value={selectedContact.bayut_sale_prices || "—"} />
+                  <LabelValue label="PF Rent Prices" value={selectedContact.pf_rent_prices || "—"} />
+                  <LabelValue label="PF Sale Prices" value={selectedContact.pf_sale_prices || "—"} />
+                  <LabelValue label="Bayut Links" value={selectedContact.bayut_links || "—"} />
+                  <LabelValue label="PF Links" value={selectedContact.pf_links || "—"} />
+                </ViewSection>
+                <ViewSection title="💰 Sales Transaction Details" isOpen={openSections['sales'] !== false} onToggle={() => toggleSection('sales')}>
+                  <LabelValue label="Latest Transaction Date" value={selectedContact.latest_transaction_date || "—"} />
+                  <LabelValue label="Latest Transaction Amount" value={selectedContact.latest_transaction_amount || "—"} />
+                  <LabelValue label="Occupancy Status (At time of sale)" value={selectedContact.occupancy_status || "—"} />
+                </ViewSection>
+                <ViewSection title="💬 Feedback" isOpen={openSections['fb'] !== false} onToggle={() => toggleSection('fb')}>
+                  <LabelValue label="Ahmed Feedback 1" value={selectedContact.ahmed_feedback_1 || "—"} />
+                  <LabelValue label="Ahmed Feedback 2" value={selectedContact.ahmed_feedback_2 || "—"} />
+                  <LabelValue label="Ahmed Feedback 3" value={selectedContact.ahmed_feedback_3 || "—"} />
+                  <LabelValue label="Zoha Feedback 1" value={selectedContact.zoha_feedback_1 || "—"} />
+                  <LabelValue label="Zoha Feedback 2" value={selectedContact.zoha_feedback_2 || "—"} />
+                  <LabelValue label="Zoha Feedback 3" value={selectedContact.zoha_feedback_3 || "—"} />
+                  <LabelValue label="Zoha Email Feedback 1" value={selectedContact.zoha_email_feedback_1 || "—"} />
+                  <LabelValue label="Zoha Email Feedback 2" value={selectedContact.zoha_email_feedback_2 || "—"} />
+                  <LabelValue label="Zoha Email Feedback 3" value={selectedContact.zoha_email_feedback_3 || "—"} />
+                </ViewSection>
+                <ViewSection title="📁 Other" isOpen={openSections['other'] !== false} onToggle={() => toggleSection('other')}>
+                  <LabelValue label="Furnishing" value={selectedContact.furnishing || "—"} />
+                  <LabelValue label="View" value={selectedContact.view || "—"} />
+                  <LabelValue label="Purpose" value={selectedContact.purpose || "—"} />
+                  <LabelValue label="Asking Sale Price" value={selectedContact.asking_sale_price || "—"} />
+                  <LabelValue label="Asking Rent Price" value={selectedContact.asking_rent_price || "—"} />
+                  <LabelValue label="VAM Listing Status" value={selectedContact.vam_listing_status || "—"} />
+                  <LabelValue label="Listing Status" value={selectedContact.listing_status || "—"} />
+                  <LabelValue label="Status" value={selectedContact.status || "—"} />
+                  <LabelValue label="Vacancy Status" value={selectedContact.vacancy_status || "—"} />
+                  <LabelValue label="Available From" value={selectedContact.available_from || "—"} />
+                  <LabelValue label="Images" value={selectedContact.images || "—"} />
+                  <LabelValue label="Videos" value={selectedContact.videos || "—"} />
+                  <LabelValue label="Documents" value={selectedContact.documents || "—"} />
+                  <LabelValue label="Listing Link" value={selectedContact.listing_link || "—"} />
+                  <LabelValue label="CRM Listing Link" value={selectedContact.crm_listing_link || "—"} />
+                  <LabelValue label="Contract A" value={selectedContact.contract_a || "—"} />
+                  <LabelValue label="Owner DOB" value={selectedContact.owner_dob || "—"} />
+                </ViewSection>
               </div>
-
-              {/* Modal Footer */}
-              <div className="bg-gray-50 p-6 border-t flex gap-3">
-                <button
-                  onClick={() => setSelectedContact(null)}
-                  className="flex-1 px-4 py-2 bg-gray-300 hover:bg-gray-400 text-gray-900 rounded-lg transition font-medium"
-                >
-                  Close
-                </button>
-                <button
-                  onClick={() => {
-                    openEditModal(selectedContact);
-                  }}
-                  className="flex-1 px-4 py-2 bg-yellow-500 hover:bg-yellow-600 text-white rounded-lg transition font-medium"
-                >
-                  ✏️ Edit Contact
-                </button>
-                <button
-                  onClick={() => {
-                    const phone = (selectedContact.owner1_mobile || '').replace(/[^0-9+]/g, '');
-                    if (phone) {
-                      window.open('https://wa.me/' + phone.replace('+', ''), '_blank');
-                    }
-                  }}
-                  disabled={!selectedContact.owner1_mobile}
-                  className="flex-1 px-4 py-2 bg-green-600 hover:bg-green-700 disabled:bg-gray-400 text-white rounded-lg transition font-medium"
-                >
-                  💬 WhatsApp
-                </button>
+              <div className="bg-gray-50 p-4 border-t flex gap-3 sticky bottom-0">
+                <button onClick={() => setSelectedContact(null)} className="flex-1 px-4 py-2 bg-gray-300 hover:bg-gray-400 text-gray-900 rounded-lg transition font-medium">Close</button>
+                <button onClick={() => { openEditModal(selectedContact); }} className="flex-1 px-4 py-2 bg-yellow-500 hover:bg-yellow-600 text-white rounded-lg transition font-medium">✏️ Edit</button>
+                <button onClick={() => { const phone = (selectedContact.owner1_mobile || '').replace(/[^0-9+]/g, ''); if (phone) { window.open('https://wa.me/' + phone.replace('+', ''), '_blank'); } }} disabled={!selectedContact.owner1_mobile} className="flex-1 px-4 py-2 bg-green-600 hover:bg-green-700 disabled:bg-gray-400 text-white rounded-lg transition font-medium">💬 WhatsApp</button>
               </div>
-
-                {/* 📋 Feedback History */}
-                <div className="mt-6 bg-gradient-to-r from-purple-50 to-pink-50 rounded-xl p-4">
-                  <h4 className="font-bold text-purple-800 mb-3">📋 Feedback History</h4>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-sm">
-                    <div className="bg-white p-3 rounded-lg">
-                      <span className="text-gray-500">Ahmed Feedback 1:</span>
-                      <span className="ml-2 font-bold text-gray-900">{selectedContact?.ahmed_feedback_1 || '—'}</span>
-                    </div>
-                    <div className="bg-white p-3 rounded-lg">
-                      <span className="text-gray-500">Ahmed Feedback 2:</span>
-                      <span className="ml-2 font-bold text-gray-900">{selectedContact?.ahmed_feedback_2 || '—'}</span>
-                    </div>
-                    <div className="bg-white p-3 rounded-lg">
-                      <span className="text-gray-500">Ahmed Feedback 3:</span>
-                      <span className="ml-2 font-bold text-gray-900">{selectedContact?.ahmed_feedback_3 || '—'}</span>
-                    </div>
-                    <div className="bg-white p-3 rounded-lg">
-                      <span className="text-gray-500">Zoha Feedback 1:</span>
-                      <span className="ml-2 font-bold text-gray-900">{selectedContact?.zoha_feedback_1 || '—'}</span>
-                    </div>
-                    <div className="bg-white p-3 rounded-lg">
-                      <span className="text-gray-500">Zoha Feedback 2:</span>
-                      <span className="ml-2 font-bold text-gray-900">{selectedContact?.zoha_feedback_2 || '—'}</span>
-                    </div>
-                    <div className="bg-white p-3 rounded-lg">
-                      <span className="text-gray-500">Zoha Feedback 3:</span>
-                      <span className="ml-2 font-bold text-gray-900">{selectedContact?.zoha_feedback_3 || '—'}</span>
-                    </div>
-                  </div>
-                </div>
             </div>
           </div>
         )}
