@@ -10,14 +10,17 @@ interface Template {
 }
 
 const VARIABLES = [
-  { key: "{unit}",      label: "Unit Number" },
-  { key: "{name}",      label: "Owner Name" },
-  { key: "{mobile1}",   label: "Mobile 1" },
-  { key: "{mobile2}",   label: "Mobile 2" },
-  { key: "{mobile3}",   label: "Mobile 3" },
+  { key: "{unit}", label: "Unit Number" },
+  { key: "{rooms_en}", label: "Rooms" },
+  { key: "{project_name_en}", label: "Project Name" },
+  { key: "{name}", label: "Owner Name" },
+  { key: "{mobile1}", label: "Mobile 1" },
+  { key: "{mobile2}", label: "Mobile 2" },
+  { key: "{mobile3}", label: "Mobile 3" },
   { key: "{feedback1}", label: "Ahmed Feedback 1" },
   { key: "{feedback2}", label: "Ahmed Feedback 2" },
   { key: "{feedback3}", label: "Ahmed Feedback 3" },
+  { key: "{zoha_feedback1}", label: "Zoha Feedback 1" },
 ];
 
 export default function TemplatesPage() {
@@ -28,6 +31,7 @@ export default function TemplatesPage() {
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
   const [bodyRef, setBodyRef] = useState<HTMLTextAreaElement | null>(null);
+  const [editingId, setEditingId] = useState<number | null>(null);
 
   async function loadTemplates() {
     const res = await fetch("/api/templates");
@@ -43,21 +47,43 @@ export default function TemplatesPage() {
     if (!name.trim() || !body.trim()) return;
     setSaving(true);
     setMessage(null);
-    const res = await fetch("/api/templates", {
-      method: "POST",
+    
+    const method = editingId ? "PUT" : "POST";
+    const url = editingId ? `/api/templates/${editingId}` : "/api/templates";
+    
+    const res = await fetch(url, {
+      method,
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ name: name.trim(), body: body.trim() }),
     });
     const data = await res.json();
     if (data.success) {
-      setMessage({ type: "success", text: `Template "${name}" saved.` });
+      setMessage({ 
+        type: "success", 
+        text: editingId ? `Template "${name}" updated.` : `Template "${name}" saved.`
+      });
       setName("");
       setBody("");
+      setEditingId(null);
       loadTemplates();
     } else {
       setMessage({ type: "error", text: data.error });
     }
     setSaving(false);
+  }
+
+  function startEdit(template: Template) {
+    setEditingId(template.id);
+    setName(template.name);
+    setBody(template.body);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
+  function cancelEdit() {
+    setEditingId(null);
+    setName("");
+    setBody("");
+    setMessage(null);
   }
 
   async function handleDelete(id: number, tplName: string) {
@@ -85,13 +111,15 @@ export default function TemplatesPage() {
     <div className="max-w-3xl">
       <h1 className="text-2xl font-bold mb-2">Message Templates</h1>
       <p className="text-sm text-gray-500 mb-6">
-        Create reusable templates for campaigns. Use variables like <code className="bg-gray-100 px-1 rounded">{"{unit}"}</code> that get replaced with real contact data when sending.
+        Create reusable templates for campaigns. Use variables like <code className="bg-gray-100 px-1 rounded">{"{'unit'}"}</code> that get replaced with real contact data when sending.
         WhatsApp formatting: <code className="bg-gray-100 px-1 rounded">*bold*</code> &nbsp; <code className="bg-gray-100 px-1 rounded">_italic_</code>
       </p>
 
-      {/* Create form */}
+      {/* Create/Edit form */}
       <div className="bg-white rounded-xl border p-6 mb-6">
-        <h2 className="text-lg font-semibold mb-4">Create New Template</h2>
+        <h2 className="text-lg font-semibold mb-4">
+          {editingId ? "Edit Template" : "Create New Template"}
+        </h2>
         <form onSubmit={handleSave} className="space-y-4">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Template Name</label>
@@ -140,13 +168,24 @@ export default function TemplatesPage() {
             </div>
           )}
 
-          <button
-            type="submit"
-            disabled={saving || !name.trim() || !body.trim()}
-            className="px-6 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 font-medium text-sm"
-          >
-            {saving ? "Saving..." : "Save Template"}
-          </button>
+          <div className="flex gap-2">
+            <button
+              type="submit"
+              disabled={saving || !name.trim() || !body.trim()}
+              className="flex-1 px-6 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 font-medium text-sm"
+            >
+              {saving ? "Saving..." : editingId ? "Update Template" : "Save Template"}
+            </button>
+            {editingId && (
+              <button
+                type="button"
+                onClick={cancelEdit}
+                className="px-6 py-2 bg-gray-300 text-gray-700 rounded-lg hover:bg-gray-400 font-medium text-sm"
+              >
+                Cancel
+              </button>
+            )}
+          </div>
         </form>
       </div>
 
@@ -170,12 +209,20 @@ export default function TemplatesPage() {
                       {tpl.body}
                     </pre>
                   </div>
-                  <button
-                    onClick={() => handleDelete(tpl.id, tpl.name)}
-                    className="text-red-500 hover:text-red-700 text-xs font-medium shrink-0"
-                  >
-                    Delete
-                  </button>
+                  <div className="flex gap-2 shrink-0">
+                    <button
+                      onClick={() => startEdit(tpl)}
+                      className="text-blue-500 hover:text-blue-700 text-xs font-medium"
+                    >
+                      Edit
+                    </button>
+                    <button
+                      onClick={() => handleDelete(tpl.id, tpl.name)}
+                      className="text-red-500 hover:text-red-700 text-xs font-medium"
+                    >
+                      Delete
+                    </button>
+                  </div>
                 </div>
               </div>
             ))}
