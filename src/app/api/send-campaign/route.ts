@@ -154,6 +154,8 @@ export async function POST(request: NextRequest) {
 
     // Send messages in background (don't block response)
     (async () => {
+      let sentCount = 0;
+      let failedCount = 0;
       try {
         // Initial delay
         if (delayBefore > 0) {
@@ -161,9 +163,6 @@ export async function POST(request: NextRequest) {
         }
 
         await sql`UPDATE campaign_runs SET started_at = NOW() WHERE id = ${campaignId}`;
-
-        let sentCount = 0;
-        let failedCount = 0;
 
         for (let i = 0; i < uniquePhones.length; i++) {
           const entry = uniquePhones[i];
