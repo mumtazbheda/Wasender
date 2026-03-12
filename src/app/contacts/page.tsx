@@ -256,6 +256,11 @@ export default function ContactsPage() {
   const [openSections, setOpenSections] = useState<Record<string, boolean>>({});
   const toggleSection = (key: string) => setOpenSections(prev => ({ ...prev, [key]: prev[key] === false ? true : false }));
   const [showWhatsAppModal, setShowWhatsAppModal] = useState(false);
+  const [whatsappSelection, setWhatsappSelection] = useState<{
+    ownerNumber: 1 | 2 | 3;
+    phone: string;
+  } | null>(null);
+  const [selectedWhatsappOwner, setSelectedWhatsappOwner] = useState<1 | 2 | 3>(1);
   const [selectedMobile, setSelectedMobile] = useState<string>("");
   const [templates, setTemplates] = useState<Template[]>([]);
   const [selectedTemplate, setSelectedTemplate] = useState<string>("");
@@ -711,6 +716,63 @@ export default function ContactsPage() {
       {isOpen && <div className="p-4 space-y-3">{children}</div>}
     </section>
   );
+
+  // ─── WhatsApp Selection Modal ────────────────────────────────────────────────
+  const WhatsAppModal = () => {
+    if (!showWhatsAppModal || !selectedContact) return null;
+
+    const availableOwners = [
+      { num: 1, name: selectedContact.owner1_name, phone: selectedContact.owner1_mobile },
+      { num: 2, name: selectedContact.owner2_name, phone: selectedContact.owner2_mobile },
+      { num: 3, name: selectedContact.owner3_name, phone: selectedContact.owner3_mobile },
+    ].filter(o => o.phone);
+
+    const handleOpenWhatsApp = (ownerNum: 1 | 2 | 3, phone: string) => {
+      const cleanPhone = phone.replace(/[^0-9]/g, '');
+      if (cleanPhone) {
+        window.open(`https://wa.me/${cleanPhone}`, '_blank');
+      }
+      setShowWhatsAppModal(false);
+      setSelectedWhatsappOwner(1);
+    };
+
+    return (
+      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div className="bg-white rounded-lg p-6 max-w-sm w-full mx-4 shadow-lg">
+          <h2 className="text-xl font-bold mb-4 text-gray-900">📱 Select Owner to Message</h2>
+          <p className="text-sm text-gray-600 mb-4">Which owner would you like to send a WhatsApp message to?</p>
+          
+          <div className="space-y-2 mb-6">
+            {availableOwners.length > 0 ? (
+              availableOwners.map((owner) => (
+                <button
+                  key={owner.num}
+                  onClick={() => handleOpenWhatsApp(owner.num as 1 | 2 | 3, owner.phone)}
+                  className="w-full p-3 border-2 border-gray-300 rounded-lg hover:border-green-500 hover:bg-green-50 transition text-left"
+                >
+                  <div className="font-medium text-gray-900">Owner {owner.num}</div>
+                  <div className="text-sm text-gray-600">{owner.name || 'N/A'}</div>
+                  <div className="text-sm text-green-600 font-mono">{owner.phone}</div>
+                </button>
+              ))
+            ) : (
+              <p className="text-gray-500 text-sm">No phone numbers available for this contact</p>
+            )}
+          </div>
+
+          <button
+            onClick={() => {
+              setShowWhatsAppModal(false);
+              setSelectedWhatsappOwner(1);
+            }}
+            className="w-full px-4 py-2 bg-gray-300 hover:bg-gray-400 text-gray-900 rounded-lg transition font-medium"
+          >
+            Cancel
+          </button>
+        </div>
+      </div>
+    );
+  };
 
   // ─── Auth guards ───────────────────────────────────────────────────────────
   if (status === "loading") {
@@ -1403,8 +1465,6 @@ export default function ContactsPage() {
                   <LabelValue label="Furnishing" value={selectedContact.furnishing || "—"} />
                   <LabelValue label="View" value={selectedContact.view || "—"} />
                   <LabelValue label="Purpose" value={selectedContact.purpose || "—"} />
-                  <LabelValue label="Asking Sale Price" value={selectedContact.asking_sale_price || "—"} />
-                  <LabelValue label="Asking Rent Price" value={selectedContact.asking_rent_price || "—"} />
                   <LabelValue label="VAM Listing Status" value={selectedContact.vam_listing_status || "—"} />
                   <LabelValue label="Listing Status" value={selectedContact.listing_status || "—"} />
                   <LabelValue label="Status" value={selectedContact.status || "—"} />
@@ -1422,7 +1482,7 @@ export default function ContactsPage() {
               <div className="bg-gray-50 p-4 border-t flex gap-3 sticky bottom-0">
                 <button onClick={() => setSelectedContact(null)} className="flex-1 px-4 py-2 bg-gray-300 hover:bg-gray-400 text-gray-900 rounded-lg transition font-medium">Close</button>
                 <button onClick={() => { openEditModal(selectedContact); }} className="flex-1 px-4 py-2 bg-yellow-500 hover:bg-yellow-600 text-white rounded-lg transition font-medium">✏️ Edit</button>
-                <button onClick={() => { const phone = (selectedContact.owner1_mobile || '').replace(/[^0-9+]/g, ''); if (phone) { window.open('https://wa.me/' + phone.replace('+', ''), '_blank'); } }} disabled={!selectedContact.owner1_mobile} className="flex-1 px-4 py-2 bg-green-600 hover:bg-green-700 disabled:bg-gray-400 text-white rounded-lg transition font-medium">💬 WhatsApp</button>
+                <button onClick={() => setShowWhatsAppModal(true)} disabled={!selectedContact.owner1_mobile && !selectedContact.owner2_mobile && !selectedContact.owner3_mobile} className="flex-1 px-4 py-2 bg-green-600 hover:bg-green-700 disabled:bg-gray-400 text-white rounded-lg transition font-medium">💬 WhatsApp</button>
               </div>
             </div>
           </div>
@@ -1510,6 +1570,9 @@ export default function ContactsPage() {
             </div>
           </div>
         )}
+
+        {/* WhatsApp Selection Modal */}
+        <WhatsAppModal />
       </div>
     </div>
   );

@@ -113,11 +113,11 @@ export default function SendMessagePage() {
           <input
             type="tel"
             className="w-full border rounded-lg px-4 py-3 text-sm"
-            placeholder="e.g. 971501234567"
+            placeholder="971501234567 (digits only)"
             value={phone}
             onChange={(e) => setPhone(e.target.value)}
           />
-          <p className="text-xs text-gray-400 mt-1">Include country code without + or spaces</p>
+          <p className="text-xs text-gray-400 mt-1">Format: 971501234567 (country code + digits only, no + or spaces)</p>
         </div>
 
         {/* Message */}
