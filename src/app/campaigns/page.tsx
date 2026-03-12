@@ -271,6 +271,26 @@ export default function CampaignsPage() {
         <div className="space-y-6">
           <h2 className="text-2xl font-bold">Step 1: Select Contacts</h2>
 
+          {/* Sheet Selection */}
+          <div className="p-4 bg-indigo-50 border border-indigo-200 rounded-lg">
+            <label className="block font-semibold mb-2">📊 Select Sheet to Load Contacts From</label>
+            <select
+              value={sheetName}
+              onChange={e => {
+                setSheetName(e.target.value);
+                setSelectedContacts(new Set());
+              }}
+              className="w-full px-4 py-2 border border-indigo-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white font-semibold"
+            >
+              <option value="Time 1">Time 1</option>
+              <option value="Time 1 New">Time 1 New</option>
+              <option value="Active">Active</option>
+              <option value="Listing">Listing</option>
+              <option value="Contact">Contact</option>
+            </select>
+            <p className="text-sm text-gray-600 mt-2">⏳ Loading {filteredContacts.length} contacts from "{sheetName}" sheet...</p>
+          </div>
+
           {/* Search */}
           <input
             type="text"
