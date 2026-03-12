@@ -253,6 +253,8 @@ export default function ContactsPage() {
   const [error, setError] = useState<string>("");
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedContact, setSelectedContact] = useState<Contact | null>(null);
+  const [openSections, setOpenSections] = useState<Record<string, boolean>>({});
+  const toggleSection = (key: string) => setOpenSections(prev => ({ ...prev, [key]: prev[key] === false ? true : false }));
   const [showWhatsAppModal, setShowWhatsAppModal] = useState(false);
   const [selectedMobile, setSelectedMobile] = useState<string>("");
   const [templates, setTemplates] = useState<Template[]>([]);
