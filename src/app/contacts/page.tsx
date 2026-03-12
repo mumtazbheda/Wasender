@@ -84,15 +84,18 @@ export default function ContactsPage() {
   const [selectedTemplate, setSelectedTemplate] = useState<string>("");
   const [sortOrder, setSortOrder] = useState<SortOrder>("none");
 
-  // Filters state
+  // Filters state - NOW INCLUDES AHMED & ZOHA FEEDBACK
   const [filters, setFilters] = useState({
     purpose: [] as string[],
     rooms: [] as string[],
     listing_status: [] as string[],
     rental_contract_status: [] as string[],
-    zoha_email_feedback_1: [] as string[],
-    zoha_email_feedback_2: [] as string[],
-    zoha_email_feedback_3: [] as string[],
+    ahmed_feedback_1: [] as string[],
+    ahmed_feedback_2: [] as string[],
+    ahmed_feedback_3: [] as string[],
+    zoha_feedback_1: [] as string[],
+    zoha_feedback_2: [] as string[],
+    zoha_feedback_3: [] as string[],
   });
 
   // Load sheets
@@ -246,9 +249,12 @@ export default function ContactsPage() {
         (filters.rooms.length === 0 || filters.rooms.includes(contact.rooms_en)) &&
         (filters.listing_status.length === 0 || filters.listing_status.includes(contact.listing_status)) &&
         (filters.rental_contract_status.length === 0 || filters.rental_contract_status.includes(contact.rental_contract_status)) &&
-        (filters.zoha_email_feedback_1.length === 0 || filters.zoha_email_feedback_1.includes(contact.zoha_email_feedback_1)) &&
-        (filters.zoha_email_feedback_2.length === 0 || filters.zoha_email_feedback_2.includes(contact.zoha_email_feedback_2)) &&
-        (filters.zoha_email_feedback_3.length === 0 || filters.zoha_email_feedback_3.includes(contact.zoha_email_feedback_3));
+        (filters.ahmed_feedback_1.length === 0 || filters.ahmed_feedback_1.includes(contact.ahmed_feedback_1)) &&
+        (filters.ahmed_feedback_2.length === 0 || filters.ahmed_feedback_2.includes(contact.ahmed_feedback_2)) &&
+        (filters.ahmed_feedback_3.length === 0 || filters.ahmed_feedback_3.includes(contact.ahmed_feedback_3)) &&
+        (filters.zoha_feedback_1.length === 0 || filters.zoha_feedback_1.includes(contact.zoha_feedback_1)) &&
+        (filters.zoha_feedback_2.length === 0 || filters.zoha_feedback_2.includes(contact.zoha_feedback_2)) &&
+        (filters.zoha_feedback_3.length === 0 || filters.zoha_feedback_3.includes(contact.zoha_feedback_3));
 
       return matchSearch && matchFilters;
     });
@@ -270,23 +276,23 @@ export default function ContactsPage() {
     setFilteredContacts(result);
   }, [contacts, searchQuery, filters, sortOrder]);
 
-  // Label-value pair component
+  // Label-value pair component - NO UNDERLINE
   const LabelValue = ({ label, value }: { label: string; value: React.ReactNode }) => (
     <div className="flex justify-between items-start gap-4 text-sm">
       <span className="text-gray-600 font-medium min-w-[120px]">{label}:</span>
-      <span className="text-gray-900 text-right">{value || "N/A"}</span>
+      <span className="text-gray-900 text-right break-all">{value || "N/A"}</span>
     </div>
   );
 
-  // Phone link component
+  // Phone link component - EMOJI ON LEFT, NO UNDERLINE
   const PhoneLink = ({ phone }: { phone: string }) => (
     phone ? (
       <a
         href={`tel:${phone}`}
-        className="text-blue-600 hover:text-blue-800 underline font-medium"
+        className="text-blue-600 hover:text-blue-800 font-medium no-underline hover:underline flex items-center gap-2 justify-end"
       >
+        <span className="text-lg">📞</span>
         {phone}
-        <span className="ml-2 text-xs">📞</span>
       </a>
     ) : (
       <span className="text-gray-400">Not provided</span>
@@ -399,7 +405,7 @@ export default function ContactsPage() {
               </div>
             </div>
 
-            {/* Filters Grid */}
+            {/* Filters Grid - NOW WITH FEEDBACK COLUMNS */}
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">Purpose</label>
@@ -488,6 +494,140 @@ export default function ContactsPage() {
                   ))}
                 </select>
               </div>
+
+              {/* AHMED FEEDBACK FILTERS */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Ahmed Feedback 1</label>
+                <select
+                  multiple
+                  value={filters.ahmed_feedback_1}
+                  onChange={(e) =>
+                    setFilters({
+                      ...filters,
+                      ahmed_feedback_1: Array.from(e.target.selectedOptions, (opt) => opt.value),
+                    })
+                  }
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                  size={3}
+                >
+                  {getUniqueValues("ahmed_feedback_1").map((val) => (
+                    <option key={val} value={val}>
+                      {val}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Ahmed Feedback 2</label>
+                <select
+                  multiple
+                  value={filters.ahmed_feedback_2}
+                  onChange={(e) =>
+                    setFilters({
+                      ...filters,
+                      ahmed_feedback_2: Array.from(e.target.selectedOptions, (opt) => opt.value),
+                    })
+                  }
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                  size={3}
+                >
+                  {getUniqueValues("ahmed_feedback_2").map((val) => (
+                    <option key={val} value={val}>
+                      {val}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Ahmed Feedback 3</label>
+                <select
+                  multiple
+                  value={filters.ahmed_feedback_3}
+                  onChange={(e) =>
+                    setFilters({
+                      ...filters,
+                      ahmed_feedback_3: Array.from(e.target.selectedOptions, (opt) => opt.value),
+                    })
+                  }
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                  size={3}
+                >
+                  {getUniqueValues("ahmed_feedback_3").map((val) => (
+                    <option key={val} value={val}>
+                      {val}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* ZOHA FEEDBACK FILTERS */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Zoha Feedback 1</label>
+                <select
+                  multiple
+                  value={filters.zoha_feedback_1}
+                  onChange={(e) =>
+                    setFilters({
+                      ...filters,
+                      zoha_feedback_1: Array.from(e.target.selectedOptions, (opt) => opt.value),
+                    })
+                  }
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                  size={3}
+                >
+                  {getUniqueValues("zoha_feedback_1").map((val) => (
+                    <option key={val} value={val}>
+                      {val}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Zoha Feedback 2</label>
+                <select
+                  multiple
+                  value={filters.zoha_feedback_2}
+                  onChange={(e) =>
+                    setFilters({
+                      ...filters,
+                      zoha_feedback_2: Array.from(e.target.selectedOptions, (opt) => opt.value),
+                    })
+                  }
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                  size={3}
+                >
+                  {getUniqueValues("zoha_feedback_2").map((val) => (
+                    <option key={val} value={val}>
+                      {val}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Zoha Feedback 3</label>
+                <select
+                  multiple
+                  value={filters.zoha_feedback_3}
+                  onChange={(e) =>
+                    setFilters({
+                      ...filters,
+                      zoha_feedback_3: Array.from(e.target.selectedOptions, (opt) => opt.value),
+                    })
+                  }
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                  size={3}
+                >
+                  {getUniqueValues("zoha_feedback_3").map((val) => (
+                    <option key={val} value={val}>
+                      {val}
+                    </option>
+                  ))}
+                </select>
+              </div>
             </div>
 
             <p className="mt-4 text-sm text-gray-600 font-medium">
@@ -496,7 +636,7 @@ export default function ContactsPage() {
           </div>
         )}
 
-        {/* Contacts Grid - REDESIGNED */}
+        {/* Contacts Grid */}
         {filteredContacts.length > 0 && (
           <div>
             <h2 className="text-2xl font-bold mb-6 text-gray-900">
@@ -561,16 +701,17 @@ export default function ContactsPage() {
                         </span>
                       </div>
 
-                      {/* Contact Number - Clickable */}
+                      {/* Contact Number - PHONE EMOJI ON LEFT NOW */}
                       {contact.owner1_mobile && (
                         <div className="flex justify-between items-center border-t pt-3 mt-3">
                           <span className="text-gray-600 font-medium">Contact:</span>
                           <a
                             href={`tel:${contact.owner1_mobile}`}
                             onClick={(e) => e.stopPropagation()}
-                            className="text-blue-600 hover:text-blue-800 underline text-sm font-medium"
+                            className="text-blue-600 hover:text-blue-800 text-sm font-medium flex items-center gap-1"
                           >
-                            {contact.owner1_mobile} 📞
+                            <span className="text-lg">📞</span>
+                            {contact.owner1_mobile}
                           </a>
                         </div>
                       )}
@@ -589,7 +730,7 @@ export default function ContactsPage() {
           </div>
         )}
 
-        {/* Detail Modal - REDESIGNED */}
+        {/* Detail Modal */}
         {selectedContact && !showWhatsAppModal && (
           <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
             <div className="bg-white rounded-xl shadow-2xl max-w-3xl w-full max-h-[90vh] overflow-y-auto">
@@ -639,7 +780,7 @@ export default function ContactsPage() {
                     <div className="bg-blue-50 p-4 rounded-lg space-y-3">
                       <LabelValue label="Name" value={selectedContact.owner1_name} />
                       <LabelValue label="Mobile" value={<PhoneLink phone={selectedContact.owner1_mobile} />} />
-                      <LabelValue label="Email" value={selectedContact.owner1_email} />
+                      <LabelValue label="Email" value={<span className="break-all">{selectedContact.owner1_email}</span>} />
                     </div>
                   </section>
                 )}
@@ -653,7 +794,7 @@ export default function ContactsPage() {
                     <div className="bg-blue-50 p-4 rounded-lg space-y-3">
                       <LabelValue label="Name" value={selectedContact.owner2_name} />
                       <LabelValue label="Mobile" value={<PhoneLink phone={selectedContact.owner2_mobile} />} />
-                      <LabelValue label="Email" value={selectedContact.owner2_email} />
+                      <LabelValue label="Email" value={<span className="break-all">{selectedContact.owner2_email}</span>} />
                     </div>
                   </section>
                 )}
@@ -667,7 +808,7 @@ export default function ContactsPage() {
                     <div className="bg-blue-50 p-4 rounded-lg space-y-3">
                       <LabelValue label="Name" value={selectedContact.owner3_name} />
                       <LabelValue label="Mobile" value={<PhoneLink phone={selectedContact.owner3_mobile} />} />
-                      <LabelValue label="Email" value={selectedContact.owner3_email} />
+                      <LabelValue label="Email" value={<span className="break-all">{selectedContact.owner3_email}</span>} />
                     </div>
                   </section>
                 )}
