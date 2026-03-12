@@ -1,7 +1,6 @@
-'use client';
+"use client";
 
-import React, { useState, useEffect } from 'react';
-import { Trash2, Edit2, Plus } from 'lucide-react';
+import React, { useState, useEffect } from "react";
 
 interface Account {
   id: string;
@@ -10,31 +9,23 @@ interface Account {
   accessToken: string;
   businessAccountId: string;
   phoneNumberId: string;
-  status: 'active' | 'inactive' | 'pending';
-  connectedAt: string;
-}
-
-interface FormData {
-  name: string;
-  phone: string;
-  accessToken: string;
-  businessAccountId: string;
-  phoneNumberId: string;
+  status: "active" | "pending" | "inactive";
+  connectionDate: string;
 }
 
 export default function AccountsPage() {
   const [accounts, setAccounts] = useState<Account[]>([]);
-  const [showForm, setShowForm] = useState(false);
-  const [editingId, setEditingId] = useState<string | null>(null);
-  const [formData, setFormData] = useState<FormData>({
-    name: '',
-    phone: '',
-    accessToken: '',
-    businessAccountId: '',
-    phoneNumberId: '',
-  });
   const [loading, setLoading] = useState(false);
-  const [message, setMessage] = useState('');
+  const [error, setError] = useState("");
+  const [showAddForm, setShowAddForm] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [formData, setFormData] = useState({
+    name: "",
+    phone: "",
+    accessToken: "",
+    businessAccountId: "",
+    phoneNumberId: "",
+  });
 
   // Load accounts
   useEffect(() => {
@@ -42,63 +33,115 @@ export default function AccountsPage() {
   }, []);
 
   const loadAccounts = async () => {
-    try {
-      const res = await fetch('/api/accounts');
-      if (res.ok) {
-        const data = await res.json();
-        setAccounts(data.accounts || []);
-      }
-    } catch (error) {
-      console.error('Failed to load accounts:', error);
-    }
-  };
-
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const { name, value } = e.target;
-    setFormData(prev => ({ ...prev, [name]: value }));
-  };
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
     setLoading(true);
-    setMessage('');
-
     try {
-      const method = editingId ? 'PUT' : 'POST';
-      const url = editingId ? `/api/accounts/${editingId}` : '/api/accounts';
-
-      const res = await fetch(url, {
-        method,
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(formData),
-      });
-
+      const res = await fetch("/api/accounts");
+      const data = await res.json();
       if (res.ok) {
-        setMessage(
-          editingId ? '✅ Account updated successfully!' : '✅ Account added successfully!'
-        );
-        setFormData({
-          name: '',
-          phone: '',
-          accessToken: '',
-          businessAccountId: '',
-          phoneNumberId: '',
-        });
-        setEditingId(null);
-        setShowForm(false);
-        loadAccounts();
+        setAccounts(data.accounts || []);
       } else {
-        const error = await res.json();
-        setMessage(`❌ Error: ${error.message}`);
+        setError(data.error || "Failed to load accounts");
       }
-    } catch (error) {
-      setMessage(`❌ Error: ${error}`);
+    } catch (err) {
+      setError("Error loading accounts: " + (err instanceof Error ? err.message : "Unknown error"));
     } finally {
       setLoading(false);
     }
   };
 
-  const handleEdit = (account: Account) => {
+  const handleAddAccount = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!formData.name || !formData.phone || !formData.accessToken) {
+      setError("Please fill all required fields");
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const res = await fetch("/api/accounts", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(formData),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setAccounts([...accounts, data.account]);
+        setFormData({
+          name: "",
+          phone: "",
+          accessToken: "",
+          businessAccountId: "",
+          phoneNumberId: "",
+        });
+        setShowAddForm(false);
+        setError("")
+      } else {
+        setError(data.error || "Failed to add account");
+      }
+    } catch (err) {
+      setError("Error adding account: " + (err instanceof Error ? err.message : "Unknown error"));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleUpdateAccount = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingId) return;
+
+    setLoading(true);
+    try {
+      const res = await fetch(`/api/accounts/${editingId}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(formData),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setAccounts(accounts.map((a) => (a.id === editingId ? data.account : a)));
+        setEditingId(null);
+        setFormData({
+          name: "",
+          phone: "",
+          accessToken: "",
+          businessAccountId: "",
+          phoneNumberId: "",
+        });
+        setError("");
+      } else {
+        setError(data.error || "Failed to update account");
+      }
+    } catch (err) {
+      setError("Error updating account: " + (err instanceof Error ? err.message : "Unknown error"));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleDeleteAccount = async (id: string) => {
+    if (!confirm("Are you sure you want to delete this account?")) return;
+
+    setLoading(true);
+    try {
+      const res = await fetch(`/api/accounts/${id}`, {
+        method: "DELETE",
+      });
+      if (res.ok) {
+        setAccounts(accounts.filter((a) => a.id !== id));
+        setError("");
+      } else {
+        const data = await res.json();
+        setError(data.error || "Failed to delete account");
+      }
+    } catch (err) {
+      setError("Error deleting account: " + (err instanceof Error ? err.message : "Unknown error"));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const startEdit = (account: Account) => {
+    setEditingId(account.id);
     setFormData({
       name: account.name,
       phone: account.phone,
@@ -106,238 +149,247 @@ export default function AccountsPage() {
       businessAccountId: account.businessAccountId,
       phoneNumberId: account.phoneNumberId,
     });
-    setEditingId(account.id);
-    setShowForm(true);
+    setShowAddForm(false);
   };
 
-  const handleDelete = async (id: string) => {
-    if (!confirm('Are you sure you want to delete this account?')) return;
-
-    try {
-      const res = await fetch(`/api/accounts/${id}`, { method: 'DELETE' });
-      if (res.ok) {
-        setMessage('✅ Account deleted successfully!');
-        loadAccounts();
-      }
-    } catch (error) {
-      setMessage(`❌ Error: ${error}`);
-    }
-  };
-
-  const handleCancel = () => {
-    setShowForm(false);
+  const cancelEdit = () => {
     setEditingId(null);
+    setShowAddForm(false);
     setFormData({
-      name: '',
-      phone: '',
-      accessToken: '',
-      businessAccountId: '',
-      phoneNumberId: '',
+      name: "",
+      phone: "",
+      accessToken: "",
+      businessAccountId: "",
+      phoneNumberId: "",
     });
-    setMessage('');
+    setError("");
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-50 p-6">
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 p-4 sm:p-6">
       <div className="max-w-6xl mx-auto">
         {/* Header */}
         <div className="mb-8">
-          <h1 className="text-4xl font-bold mb-2">📱 WhatsApp Accounts</h1>
-          <p className="text-gray-600">Manage your connected WhatsApp accounts for sending campaigns</p>
+          <h1 className="text-4xl font-bold text-gray-900 mb-2">📱 WhatsApp Accounts</h1>
+          <p className="text-gray-600">Manage WhatsApp accounts connected to Wasender</p>
         </div>
 
-        {/* Message */}
-        {message && (
-          <div className={`mb-6 p-4 rounded-lg ${
-            message.includes('✅')
-              ? 'bg-green-100 border border-green-300 text-green-800'
-              : 'bg-red-100 border border-red-300 text-red-800'
-          }`}>
-            {message}
+        {/* Error Message */}
+        {error && (
+          <div className="mb-6 p-4 bg-red-100 text-red-800 rounded-lg border border-red-300">
+            {error}
           </div>
         )}
 
-        {/* Main Content */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Accounts List */}
-          <div className="lg:col-span-2">
-            <div className="bg-white rounded-lg shadow-lg p-6">
-              <div className="flex justify-between items-center mb-6">
-                <h2 className="text-2xl font-bold">Connected Accounts</h2>
-                {!showForm && (
-                  <button
-                    onClick={() => setShowForm(true)}
-                    className="flex items-center gap-2 px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600"
-                  >
-                    <Plus size={20} />
-                    Add Account
-                  </button>
-                )}
+        {/* Add Account Button */}
+        {!showAddForm && !editingId && (
+          <div className="mb-6">
+            <button
+              onClick={() => setShowAddForm(true)}
+              className="px-6 py-3 bg-green-600 hover:bg-green-700 text-white rounded-lg font-medium transition flex items-center gap-2"
+            >
+              ➕ Add New Account
+            </button>
+          </div>
+        )}
+
+        {/* Add/Edit Form */}
+        {(showAddForm || editingId) && (
+          <div className="bg-white rounded-lg shadow-md p-6 mb-6 border-l-4 border-blue-600">
+            <h2 className="text-2xl font-bold mb-6 text-gray-900">
+              {editingId ? "Edit Account" : "Add New WhatsApp Account"}
+            </h2>
+            <form onSubmit={editingId ? handleUpdateAccount : handleAddAccount}>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Account Name <span className="text-red-600">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={formData.name}
+                    onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                    placeholder="e.g., Ahmed, Zoha"
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    required
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    WhatsApp Phone Number <span className="text-red-600">*</span>
+                  </label>
+                  <input
+                    type="tel"
+                    value={formData.phone}
+                    onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+                    placeholder="e.g., +971501234567"
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    required
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Access Token <span className="text-red-600">*</span>
+                  </label>
+                  <input
+                    type="password"
+                    value={formData.accessToken}
+                    onChange={(e) => setFormData({ ...formData, accessToken: e.target.value })}
+                    placeholder="WhatsApp API Access Token"
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    required
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Business Account ID
+                  </label>
+                  <input
+                    type="text"
+                    value={formData.businessAccountId}
+                    onChange={(e) => setFormData({ ...formData, businessAccountId: e.target.value })}
+                    placeholder="Optional"
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Phone Number ID
+                  </label>
+                  <input
+                    type="text"
+                    value={formData.phoneNumberId}
+                    onChange={(e) => setFormData({ ...formData, phoneNumberId: e.target.value })}
+                    placeholder="Optional"
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  />
+                </div>
               </div>
 
-              {accounts.length === 0 ? (
-                <div className="text-center py-12 text-gray-500">
-                  <p className="text-lg">No accounts connected yet</p>
-                  <p className="text-sm">Click "Add Account" to connect a WhatsApp account</p>
-                </div>
-              ) : (
-                <div className="space-y-4">
-                  {accounts.map(account => (
-                    <div
-                      key={account.id}
-                      className="p-4 border border-gray-200 rounded-lg hover:bg-gray-50 transition"
-                    >
-                      <div className="flex justify-between items-start">
-                        <div className="flex-1">
-                          <h3 className="font-bold text-lg">{account.name}</h3>
-                          <p className="text-gray-600 text-sm">📱 {account.phone}</p>
-                          <div className="mt-2 flex items-center gap-2">
-                            <span
-                              className={`px-3 py-1 rounded-full text-xs font-semibold ${
-                                account.status === 'active'
-                                  ? 'bg-green-100 text-green-800'
-                                  : account.status === 'pending'
-                                  ? 'bg-yellow-100 text-yellow-800'
-                                  : 'bg-gray-100 text-gray-800'
-                              }`}
-                            >
-                              {account.status === 'active'
-                                ? '✓ Active'
-                                : account.status === 'pending'
-                                ? '⏳ Pending'
-                                : '✗ Inactive'}
-                            </span>
-                            <span className="text-xs text-gray-500">
-                              Connected {new Date(account.connectedAt).toLocaleDateString()}
-                            </span>
-                          </div>
-                        </div>
-                        <div className="flex gap-2">
-                          <button
-                            onClick={() => handleEdit(account)}
-                            className="p-2 text-blue-500 hover:bg-blue-50 rounded-lg"
-                            title="Edit account"
-                          >
-                            <Edit2 size={18} />
-                          </button>
-                          <button
-                            onClick={() => handleDelete(account.id)}
-                            className="p-2 text-red-500 hover:bg-red-50 rounded-lg"
-                            title="Delete account"
-                          >
-                            <Trash2 size={18} />
-                          </button>
-                        </div>
+              <div className="flex gap-3">
+                <button
+                  type="submit"
+                  disabled={loading}
+                  className="px-6 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white rounded-lg font-medium transition"
+                >
+                  {loading ? "Processing..." : editingId ? "Update Account" : "Add Account"}
+                </button>
+                <button
+                  type="button"
+                  onClick={cancelEdit}
+                  className="px-6 py-2 bg-gray-300 hover:bg-gray-400 text-gray-900 rounded-lg font-medium transition"
+                >
+                  Cancel
+                </button>
+              </div>
+            </form>
+          </div>
+        )}
+
+        {/* Accounts List */}
+        {accounts.length > 0 && !showAddForm && !editingId && (
+          <div>
+            <h2 className="text-2xl font-bold mb-6 text-gray-900">
+              Connected Accounts ({accounts.length})
+            </h2>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {accounts.map((account) => (
+                <div
+                  key={account.id}
+                  className="bg-white rounded-lg shadow-md hover:shadow-lg transition overflow-hidden border-l-4 border-green-500"
+                >
+                  {/* Card Header */}
+                  <div className="bg-gradient-to-r from-green-600 to-green-700 text-white p-4">
+                    <h3 className="text-xl font-bold">{account.name}</h3>
+                    <div className="flex items-center gap-2 mt-2">
+                      <span
+                        className={`w-3 h-3 rounded-full ${
+                          account.status === "active"
+                            ? "bg-green-400"
+                            : account.status === "pending"
+                            ? "bg-yellow-400"
+                            : "bg-red-400"
+                        }`}
+                      ></span>
+                      <span className="text-sm capitalize text-green-100">
+                        {account.status}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Card Body */}
+                  <div className="p-5 space-y-3">
+                    {/* Phone */}
+                    <div className="flex items-start gap-3 border-b pb-3">
+                      <span className="text-lg">📱</span>
+                      <div className="flex-1">
+                        <p className="text-xs text-gray-500 font-medium">Phone Number</p>
+                        <p className="text-gray-900 font-semibold break-all">{account.phone}</p>
                       </div>
                     </div>
-                  ))}
+
+                    {/* Connected Date */}
+                    <div className="flex items-start gap-3 border-b pb-3">
+                      <span className="text-lg">📅</span>
+                      <div className="flex-1">
+                        <p className="text-xs text-gray-500 font-medium">Connected</p>
+                        <p className="text-gray-900 font-semibold">
+                          {new Date(account.connectionDate).toLocaleDateString()}
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* Token Info */}
+                    <div className="flex items-start gap-3">
+                      <span className="text-lg">🔑</span>
+                      <div className="flex-1">
+                        <p className="text-xs text-gray-500 font-medium">API Token</p>
+                        <p className="text-gray-900 font-mono text-xs break-all">
+                          {account.accessToken.substring(0, 20)}...
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Card Footer */}
+                  <div className="bg-gray-50 px-5 py-3 border-t flex gap-2">
+                    <button
+                      onClick={() => startEdit(account)}
+                      className="flex-1 px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm rounded-lg transition font-medium"
+                    >
+                      ✏️ Edit
+                    </button>
+                    <button
+                      onClick={() => handleDeleteAccount(account.id)}
+                      className="flex-1 px-3 py-2 bg-red-600 hover:bg-red-700 text-white text-sm rounded-lg transition font-medium"
+                    >
+                      🗑️ Delete
+                    </button>
+                  </div>
                 </div>
-              )}
+              ))}
             </div>
           </div>
+        )}
 
-          {/* Form */}
-          {showForm && (
-            <div className="lg:col-span-1">
-              <div className="bg-white rounded-lg shadow-lg p-6 sticky top-6">
-                <h2 className="text-xl font-bold mb-4">
-                  {editingId ? '✏️ Edit Account' : '➕ Add New Account'}
-                </h2>
-
-                <form onSubmit={handleSubmit} className="space-y-4">
-                  <div>
-                    <label className="block text-sm font-semibold mb-1">Account Name *</label>
-                    <input
-                      type="text"
-                      name="name"
-                      value={formData.name}
-                      onChange={handleInputChange}
-                      placeholder="e.g., Ahmed Account"
-                      required
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-semibold mb-1">Phone Number *</label>
-                    <input
-                      type="text"
-                      name="phone"
-                      value={formData.phone}
-                      onChange={handleInputChange}
-                      placeholder="e.g., +971501234567"
-                      required
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-semibold mb-1">Access Token *</label>
-                    <input
-                      type="password"
-                      name="accessToken"
-                      value={formData.accessToken}
-                      onChange={handleInputChange}
-                      placeholder="WhatsApp API token"
-                      required
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-semibold mb-1">Business Account ID *</label>
-                    <input
-                      type="text"
-                      name="businessAccountId"
-                      value={formData.businessAccountId}
-                      onChange={handleInputChange}
-                      placeholder="Your WhatsApp Business ID"
-                      required
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-semibold mb-1">Phone Number ID *</label>
-                    <input
-                      type="text"
-                      name="phoneNumberId"
-                      value={formData.phoneNumberId}
-                      onChange={handleInputChange}
-                      placeholder="Your WhatsApp Phone Number ID"
-                      required
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
-                    />
-                  </div>
-
-                  <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg text-xs text-blue-800">
-                    <strong>ℹ️ Need help?</strong>
-                    <p className="mt-1">
-                      Get these credentials from your WhatsApp Business API setup in Meta Business Manager.
-                    </p>
-                  </div>
-
-                  <div className="flex gap-2">
-                    <button
-                      type="submit"
-                      disabled={loading}
-                      className="flex-1 px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 disabled:opacity-50 font-semibold"
-                    >
-                      {loading ? 'Saving...' : editingId ? 'Update' : 'Add Account'}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={handleCancel}
-                      className="flex-1 px-4 py-2 bg-gray-500 text-white rounded-lg hover:bg-gray-600"
-                    >
-                      Cancel
-                    </button>
-                  </div>
-                </form>
-              </div>
-            </div>
-          )}
-        </div>
+        {/* Empty State */}
+        {accounts.length === 0 && !showAddForm && !editingId && !loading && (
+          <div className="text-center py-12">
+            <div className="text-6xl mb-4">📱</div>
+            <h3 className="text-2xl font-bold text-gray-900 mb-2">No accounts yet</h3>
+            <p className="text-gray-600 mb-6">Get started by adding your first WhatsApp account</p>
+            <button
+              onClick={() => setShowAddForm(true)}
+              className="px-6 py-3 bg-green-600 hover:bg-green-700 text-white rounded-lg font-medium transition inline-flex items-center gap-2"
+            >
+              ➕ Add Account
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );
