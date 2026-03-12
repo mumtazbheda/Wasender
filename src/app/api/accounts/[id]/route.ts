@@ -27,10 +27,10 @@ async function saveAccounts(accounts: any[]) {
 
 export async function PUT(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const id = params.id;
+    const { id } = await params;
     const body = await request.json();
     const { name, phone, accessToken, businessAccountId, phoneNumberId } = body;
 
@@ -59,10 +59,10 @@ export async function PUT(
 
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const id = params.id;
+    const { id } = await params;
     const accounts = await getAccounts();
     const filtered = accounts.filter((a: any) => a.id !== id);
 
