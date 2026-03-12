@@ -461,8 +461,10 @@ export default function ContactsPage() {
 
   // ─── Get unique values for filters ─────────────────────────────────────────
   const getUniqueValues = (field: keyof Contact) => {
-    const values = contacts.map((c) => c[field]).filter(Boolean);
-    return [...new Set(values)].sort();
+    const values = contacts.map((c) => String(c[field] || ''));
+    const nonEmpty = [...new Set(values.filter(v => v !== ''))].sort();
+    const hasBlank = values.some(v => v === '');
+    return hasBlank ? ['(Blank)', ...nonEmpty] : nonEmpty;
   };
 
   // ─── Apply filters and sorting ─────────────────────────────────────────────
@@ -476,29 +478,23 @@ export default function ContactsPage() {
           .includes(searchQuery.toLowerCase()) ||
         contact.owner1_mobile.includes(searchQuery);
 
+      // Helper: match filter with (Blank) support
+      const mf = (fv: string[], cv: string) => {
+        if (fv.length === 0) return true;
+        if (fv.includes('(Blank)') && (!cv || cv === '')) return true;
+        return fv.includes(cv);
+      };
       const matchFilters =
-        (filters.purpose.length === 0 ||
-          filters.purpose.includes(contact.purpose)) &&
-        (filters.rooms.length === 0 ||
-          filters.rooms.includes(contact.rooms_en)) &&
-        (filters.listing_status.length === 0 ||
-          filters.listing_status.includes(contact.listing_status)) &&
-        (filters.rental_contract_status.length === 0 ||
-          filters.rental_contract_status.includes(
-            contact.rental_contract_status
-          )) &&
-        (filters.ahmed_feedback_1.length === 0 ||
-          filters.ahmed_feedback_1.includes(contact.ahmed_feedback_1)) &&
-        (filters.ahmed_feedback_2.length === 0 ||
-          filters.ahmed_feedback_2.includes(contact.ahmed_feedback_2)) &&
-        (filters.ahmed_feedback_3.length === 0 ||
-          filters.ahmed_feedback_3.includes(contact.ahmed_feedback_3)) &&
-        (filters.zoha_feedback_1.length === 0 ||
-          filters.zoha_feedback_1.includes(contact.zoha_feedback_1)) &&
-        (filters.zoha_feedback_2.length === 0 ||
-          filters.zoha_feedback_2.includes(contact.zoha_feedback_2)) &&
-        (filters.zoha_feedback_3.length === 0 ||
-          filters.zoha_feedback_3.includes(contact.zoha_feedback_3));
+        mf(filters.purpose, contact.purpose) &&
+        mf(filters.rooms, contact.rooms_en) &&
+        mf(filters.listing_status, contact.listing_status) &&
+        mf(filters.rental_contract_status, contact.rental_contract_status) &&
+        mf(filters.ahmed_feedback_1, contact.ahmed_feedback_1) &&
+        mf(filters.ahmed_feedback_2, contact.ahmed_feedback_2) &&
+        mf(filters.ahmed_feedback_3, contact.ahmed_feedback_3) &&
+        mf(filters.zoha_feedback_1, contact.zoha_feedback_1) &&
+        mf(filters.zoha_feedback_2, contact.zoha_feedback_2) &&
+        mf(filters.zoha_feedback_3, contact.zoha_feedback_3);
 
       return matchSearch && matchFilters;
     });

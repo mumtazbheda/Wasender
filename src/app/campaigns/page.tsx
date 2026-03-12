@@ -51,6 +51,7 @@ interface Contact {
   rental_cheques: string;
   available_from: string;
   view: string;
+  project_name_en: string;
 }
 
 interface Template {
@@ -127,6 +128,7 @@ export default function CampaignsPage() {
   const [scheduleEnabled, setScheduleEnabled] = useState(false);
   const [scheduledDate, setScheduledDate] = useState('');
   const [scheduledTime, setScheduledTime] = useState('');
+  const [campaignName, setCampaignName] = useState('');
 
   // Load sheets
   useEffect(() => {
@@ -263,10 +265,12 @@ export default function CampaignsPage() {
     }
   };
 
-  // Get unique values for filters
+  // Get unique values for filters (including blank option)
   const getUniqueValues = (field: keyof Contact) => {
-    const values = contacts.map((c) => c[field]).filter(Boolean);
-    return [...new Set(values)].sort();
+    const values = contacts.map((c) => String(c[field] || ''));
+    const nonEmpty = [...new Set(values.filter(v => v !== ''))].sort();
+    const hasBlank = values.some(v => v === '');
+    return hasBlank ? ['(Blank)', ...nonEmpty] : nonEmpty;
   };
 
   // Apply filters and sorting
@@ -278,17 +282,24 @@ export default function CampaignsPage() {
         contact.owner1_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
         contact.owner1_mobile.includes(searchQuery);
 
+      // Helper: match filter with (Blank) support
+      const matchFilter = (filterValues: string[], contactValue: string) => {
+        if (filterValues.length === 0) return true;
+        if (filterValues.includes('(Blank)') && (!contactValue || contactValue === '')) return true;
+        return filterValues.includes(contactValue);
+      };
+
       const matchFilters =
-        (filters.purpose.length === 0 || filters.purpose.includes(contact.purpose)) &&
-        (filters.rooms.length === 0 || filters.rooms.includes(contact.rooms_en)) &&
-        (filters.listing_status.length === 0 || filters.listing_status.includes(contact.listing_status)) &&
-        (filters.rental_contract_status.length === 0 || filters.rental_contract_status.includes(contact.rental_contract_status)) &&
-        (filters.ahmed_feedback_1.length === 0 || filters.ahmed_feedback_1.includes(contact.ahmed_feedback_1)) &&
-        (filters.ahmed_feedback_2.length === 0 || filters.ahmed_feedback_2.includes(contact.ahmed_feedback_2)) &&
-        (filters.ahmed_feedback_3.length === 0 || filters.ahmed_feedback_3.includes(contact.ahmed_feedback_3)) &&
-        (filters.zoha_feedback_1.length === 0 || filters.zoha_feedback_1.includes(contact.zoha_feedback_1)) &&
-        (filters.zoha_feedback_2.length === 0 || filters.zoha_feedback_2.includes(contact.zoha_feedback_2)) &&
-        (filters.zoha_feedback_3.length === 0 || filters.zoha_feedback_3.includes(contact.zoha_feedback_3));
+        matchFilter(filters.purpose, contact.purpose) &&
+        matchFilter(filters.rooms, contact.rooms_en) &&
+        matchFilter(filters.listing_status, contact.listing_status) &&
+        matchFilter(filters.rental_contract_status, contact.rental_contract_status) &&
+        matchFilter(filters.ahmed_feedback_1, contact.ahmed_feedback_1) &&
+        matchFilter(filters.ahmed_feedback_2, contact.ahmed_feedback_2) &&
+        matchFilter(filters.ahmed_feedback_3, contact.ahmed_feedback_3) &&
+        matchFilter(filters.zoha_feedback_1, contact.zoha_feedback_1) &&
+        matchFilter(filters.zoha_feedback_2, contact.zoha_feedback_2) &&
+        matchFilter(filters.zoha_feedback_3, contact.zoha_feedback_3);
 
       return matchSearch && matchFilters;
     });
@@ -340,7 +351,7 @@ export default function CampaignsPage() {
     replaced = replaced.replace(/{name}/g, isTest ? "[Name]" : contact?.owner1_name || "[Name]");
     replaced = replaced.replace(/{unit}/g, isTest ? "[Unit]" : contact?.unit || "[Unit]");
     replaced = replaced.replace(/{rooms_en}/g, isTest ? "[Rooms]" : contact?.rooms_en || "[Rooms]");
-    replaced = replaced.replace(/{project_name_en}/g, isTest ? "[Project]" : "[Project]");
+    replaced = replaced.replace(/{project_name_en}/g, isTest ? "[Project]" : contact?.project_name_en || "[Project]");
     replaced = replaced.replace(/{phone}/g, isTest ? testPhone || "[Phone]" : contact?.owner1_mobile || "[Phone]");
     return replaced;
   };
@@ -393,23 +404,50 @@ export default function CampaignsPage() {
     return `~${(totalSeconds / 3600).toFixed(1)} hours`;
   };
 
+  // Get deduplicated phones across Owner 1/2/3 Mobile
+  const getDeduplicatedPhones = (contactList: Contact[]) => {
+    const phoneMap = new Map<string, { contact: Contact; ownerNum: number; ownerName: string }>();
+    for (const contact of contactList) {
+      const owners = [
+        { phone: contact.owner1_mobile, num: 1, name: contact.owner1_name },
+        { phone: contact.owner2_mobile, num: 2, name: contact.owner2_name },
+        { phone: contact.owner3_mobile, num: 3, name: contact.owner3_name },
+      ];
+      for (const { phone, num, name } of owners) {
+        const cleaned = (phone || '').replace(/[^0-9+]/g, '');
+        if (cleaned && !phoneMap.has(cleaned)) {
+          phoneMap.set(cleaned, { contact, ownerNum: num, ownerName: name });
+        }
+      }
+    }
+    return phoneMap;
+  };
+
   // Send campaign
   const handleSendCampaign = async () => {
     if (!selectedAccountId || !selectedTemplate || selectedContacts.size === 0) return;
+    if (!campaignName.trim()) {
+      setSendStatus({ type: 'error', message: '❌ Please enter a campaign name' });
+      return;
+    }
     setSending(true);
     setSendStatus(null);
     try {
       const selectedTemplateData = templates.find(t => String(t.id) === String(selectedTemplate));
       const selectedContactObjects = filteredContacts.filter(c => selectedContacts.has(c.rowIndex));
+      const selectedAccountData = accounts.find((a: any) => String(a.id) === selectedAccountId);
       
       const res = await fetch('/api/send-campaign', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          campaignName: campaignName.trim(),
           contacts: selectedContactObjects,
           templateName: selectedTemplateData?.name || 'Campaign',
           templateBody: selectedTemplateData?.body || '',
           accountId: selectedAccountId,
+          accountName: selectedAccountData?.name || 'Unknown',
+          sheetTab: selectedSheet,
           delayBefore,
           delayBetween,
           delayUnit,
@@ -419,7 +457,7 @@ export default function CampaignsPage() {
       });
       const data = await res.json();
       if (res.ok) {
-        setSendStatus({ type: 'success', message: `✅ Campaign started! ${data.totalContacts} messages queued. Campaign ID: ${data.campaignId}` });
+        setSendStatus({ type: 'success', message: `✅ Campaign "${campaignName}" started! ${data.uniquePhones} unique messages queued (${data.duplicatesRemoved} duplicates removed). Campaign ID: ${data.campaignId}` });
         // Refresh history
         const histRes = await fetch('/api/send-campaign');
         const histData = await histRes.json();
@@ -1213,6 +1251,16 @@ export default function CampaignsPage() {
   const selectedContactObjects = filteredContacts.filter((c) => selectedContacts.has(c.rowIndex));
   const selectedTemplateData = templates.find((t) => String(t.id) === String(selectedTemplate));
   const selectedAccountData = accounts.find((a: any) => String(a.id) === selectedAccountId);
+  const dedupPhones = getDeduplicatedPhones(selectedContactObjects);
+  const duplicatesRemoved = (() => {
+    let totalPhones = 0;
+    for (const c of selectedContactObjects) {
+      if (c.owner1_mobile?.replace(/[^0-9+]/g, '')) totalPhones++;
+      if (c.owner2_mobile?.replace(/[^0-9+]/g, '')) totalPhones++;
+      if (c.owner3_mobile?.replace(/[^0-9+]/g, '')) totalPhones++;
+    }
+    return totalPhones - dedupPhones.size;
+  })();
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 p-4 sm:p-6">
@@ -1221,13 +1269,32 @@ export default function CampaignsPage() {
         <p className="text-gray-600 mb-6">Step 4: Review & Send</p>
 
         <div className="bg-white rounded-lg shadow-md p-6 space-y-6">
-          {/* Campaign Summary */}
+          {/* Campaign Name */}
+          <div>
+            <label className="block text-lg font-bold text-gray-900 mb-2">✏️ Campaign Name <span className="text-red-500">*</span></label>
+            <input
+              type="text"
+              value={campaignName}
+              onChange={(e) => setCampaignName(e.target.value)}
+              placeholder="e.g., Blue Wave Tower - March Outreach"
+              className="w-full px-4 py-3 border-2 border-blue-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 font-medium text-lg"
+            />
+          </div>
+
+          {/* Campaign Summary with Dedup Info */}
           <div className="bg-gradient-to-r from-blue-50 to-indigo-50 p-6 rounded-lg border border-blue-200">
             <h3 className="text-xl font-bold text-gray-900 mb-4">📋 Campaign Summary</h3>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
-                <p className="text-sm text-gray-500">Contacts</p>
+                <p className="text-sm text-gray-500">Selected Contacts</p>
                 <p className="text-2xl font-bold text-blue-600">{selectedContacts.size}</p>
+              </div>
+              <div>
+                <p className="text-sm text-gray-500">Unique Phone Numbers</p>
+                <p className="text-2xl font-bold text-green-600">{dedupPhones.size}</p>
+                {duplicatesRemoved > 0 && (
+                  <p className="text-xs text-orange-600 mt-1">🔄 {duplicatesRemoved} duplicate(s) will be skipped</p>
+                )}
               </div>
               <div>
                 <p className="text-sm text-gray-500">Template</p>
@@ -1238,11 +1305,26 @@ export default function CampaignsPage() {
                 <p className="font-bold text-gray-900">{delayBetween} {delayUnit} {randomizeDelay ? '(±20%)' : ''}</p>
               </div>
               <div>
+                <p className="text-sm text-gray-500">Sheet</p>
+                <p className="font-bold text-gray-900">{selectedSheet || 'N/A'}</p>
+              </div>
+              <div>
                 <p className="text-sm text-gray-500">Est. Duration</p>
                 <p className="font-bold text-gray-900">{calculateEstimatedDuration()}</p>
               </div>
             </div>
           </div>
+
+          {/* Dedup Detail */}
+          {duplicatesRemoved > 0 && (
+            <div className="bg-yellow-50 border border-yellow-200 p-4 rounded-lg">
+              <p className="text-yellow-800 font-medium">🔄 Duplicate Phone Numbers Detected</p>
+              <p className="text-yellow-700 text-sm mt-1">
+                Found {duplicatesRemoved} duplicate phone number(s) across Owner 1/2/3 Mobile columns. 
+                Only the <b>first occurrence</b> will receive a message. Messages will be sent to <b>{dedupPhones.size}</b> unique numbers.
+              </p>
+            </div>
+          )}
 
           {/* Account Selection */}
           <div>
@@ -1281,7 +1363,10 @@ export default function CampaignsPage() {
           <div className="bg-orange-50 border border-orange-200 p-4 rounded-lg">
             <p className="text-orange-800 font-medium">⚠️ Important Notes:</p>
             <ul className="text-orange-700 text-sm mt-2 list-disc list-inside space-y-1">
-              <li>Messages will be sent to {selectedContacts.size} contacts</li>
+              <li>Messages will be sent to <b>{dedupPhones.size}</b> unique phone numbers (from {selectedContacts.size} contacts)</li>
+              <li>Phone numbers from Owner 1, Owner 2, and Owner 3 columns are all included</li>
+              <li>Duplicate phone numbers across contacts are automatically skipped</li>
+              <li>Feedback columns will be updated in Google Sheet after each successful send</li>
               <li>Each message will have variables replaced with actual contact data</li>
               <li>Sending too many messages too quickly may trigger WhatsApp restrictions</li>
               <li>Make sure you&apos;ve tested with a single number first</li>
@@ -1310,7 +1395,7 @@ export default function CampaignsPage() {
               disabled={sending || !selectedAccountId || selectedContacts.size === 0}
               className="flex-1 px-6 py-3 bg-green-600 hover:bg-green-700 disabled:bg-gray-400 text-white rounded-lg transition font-bold text-lg"
             >
-              {sending ? '⏳ Sending Campaign...' : `🚀 Send to ${selectedContacts.size} Contacts`}
+              {sending ? '⏳ Sending Campaign...' : `🚀 Send to ${dedupPhones.size} Unique Numbers`}
             </button>
           </div>
         </div>
@@ -1321,10 +1406,10 @@ export default function CampaignsPage() {
             <h2 className="text-xl font-bold text-gray-900 mb-4">📊 Campaign History</h2>
             <div className="space-y-3">
               {campaignHistory.map((campaign: any) => (
-                <div key={campaign.id} className="border border-gray-200 rounded-lg p-4">
+                <div key={campaign.id} className="border border-gray-200 rounded-lg p-4 hover:border-blue-300 transition cursor-pointer" onClick={() => window.open('/campaign-history?id=' + campaign.id, '_blank')}>
                   <div className="flex justify-between items-start">
                     <div>
-                      <p className="font-bold text-gray-900">{campaign.template_name}</p>
+                      <p className="font-bold text-gray-900">{campaign.name || campaign.template_name}</p>
                       <p className="text-sm text-gray-500">{new Date(campaign.created_at).toLocaleString()}</p>
                     </div>
                     <span className={`px-3 py-1 rounded-full text-xs font-bold ${

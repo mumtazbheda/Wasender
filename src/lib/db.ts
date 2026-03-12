@@ -57,15 +57,19 @@ export async function initializeDatabase() {
     )
   `;
 
-  // Campaign Runs
+  // Campaign Runs - enhanced with name, account_name, sheet_tab, dedup tracking
   await sql`
     CREATE TABLE IF NOT EXISTS campaign_runs (
       id SERIAL PRIMARY KEY,
       name TEXT DEFAULT '',
       account_id INTEGER,
+      account_name TEXT DEFAULT '',
       template_name TEXT NOT NULL,
       template_body TEXT NOT NULL,
+      sheet_tab TEXT DEFAULT '',
       total_contacts INTEGER DEFAULT 0,
+      total_unique_phones INTEGER DEFAULT 0,
+      duplicates_removed INTEGER DEFAULT 0,
       sent_count INTEGER DEFAULT 0,
       failed_count INTEGER DEFAULT 0,
       status TEXT DEFAULT 'pending',
@@ -81,7 +85,13 @@ export async function initializeDatabase() {
     )
   `;
 
-  // Campaign Messages Log
+  // Add new columns if they don't exist (safe migration)
+  await sql`ALTER TABLE campaign_runs ADD COLUMN IF NOT EXISTS account_name TEXT DEFAULT ''`;
+  await sql`ALTER TABLE campaign_runs ADD COLUMN IF NOT EXISTS sheet_tab TEXT DEFAULT ''`;
+  await sql`ALTER TABLE campaign_runs ADD COLUMN IF NOT EXISTS total_unique_phones INTEGER DEFAULT 0`;
+  await sql`ALTER TABLE campaign_runs ADD COLUMN IF NOT EXISTS duplicates_removed INTEGER DEFAULT 0`;
+
+  // Campaign Messages Log - enhanced with owner_num tracking
   await sql`
     CREATE TABLE IF NOT EXISTS campaign_messages (
       id SERIAL PRIMARY KEY,
@@ -89,6 +99,7 @@ export async function initializeDatabase() {
       phone TEXT NOT NULL,
       unit_name TEXT DEFAULT '',
       owner_name TEXT DEFAULT '',
+      owner_num INTEGER DEFAULT 1,
       message_text TEXT DEFAULT '',
       status TEXT DEFAULT 'pending',
       error_message TEXT DEFAULT '',
@@ -96,6 +107,9 @@ export async function initializeDatabase() {
       created_at TIMESTAMP DEFAULT NOW()
     )
   `;
+
+  // Add owner_num column if it doesn't exist
+  await sql`ALTER TABLE campaign_messages ADD COLUMN IF NOT EXISTS owner_num INTEGER DEFAULT 1`;
 }
 
 export { sql };

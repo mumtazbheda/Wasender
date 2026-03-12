@@ -13,7 +13,8 @@ const Sidebar = () => {
   const menuItems = [
     { name: "Dashboard", path: "/", icon: "📊" },
     { name: "Contacts", path: "/contacts", icon: "👥" },
-    { name: "Campaigns", path: "/campaigns", icon: "📧" },
+    { name: "New Campaign", path: "/campaigns", icon: "🚀" },
+    { name: "Campaign History", path: "/campaign-history", icon: "📋" },
     { name: "Accounts", path: "/accounts", icon: "📱" },
     { name: "Templates", path: "/templates", icon: "📝" },
     { name: "Messages", path: "/messages", icon: "💬" },

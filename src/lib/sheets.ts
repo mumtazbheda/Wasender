@@ -53,6 +53,7 @@ export interface Contact {
   rental_cheques: string;
   available_from: string;
   view: string;
+  project_name_en: string;
 }
 
 function getSheetsClient(accessToken: string) {
@@ -118,7 +119,19 @@ function detectColumns(headers: string[]) {
     rental_cheques: findByName(["cheque", "cheques"]),
     available_from: findByName(["available"]),
     view: findByName(["view"]),
+    project_name_en: findByName(["project_name_en", "project name"]),
   };
+}
+
+// Convert 0-based column index to A1 notation (A, B, ..., Z, AA, AB, ..., AZ, BA, ...)
+function columnToA1(index: number): string {
+  let result = '';
+  let idx = index;
+  while (idx >= 0) {
+    result = String.fromCharCode(65 + (idx % 26)) + result;
+    idx = Math.floor(idx / 26) - 1;
+  }
+  return result;
 }
 
 export async function fetchSheetTabs(accessToken: string): Promise<string[]> {
@@ -217,6 +230,7 @@ export async function fetchContactData(
       rental_cheques: getStringValue(columnIndices.rental_cheques),
       available_from: getStringValue(columnIndices.available_from),
       view: getStringValue(columnIndices.view),
+      project_name_en: getStringValue(columnIndices.project_name_en),
     });
   }
 
@@ -226,7 +240,65 @@ export async function fetchContactData(
 // Alias for backward compatibility with sync-sheets API
 export const fetchContactsFromSheet = fetchContactData;
 
-// Update a single cell in Google Sheet
+// Get sheet headers for feedback column detection
+export async function getSheetHeaders(sheetTab: string): Promise<string[] | null> {
+  try {
+    const spreadsheetId = process.env.GOOGLE_SHEET_ID;
+    if (!spreadsheetId) return null;
+
+    // Use service account or cached headers approach
+    // For now, we detect from column names
+    return null; // Will be populated by getSheetHeadersWithAuth
+  } catch {
+    return null;
+  }
+}
+
+// Get sheet headers using auth token
+export async function getSheetHeadersWithAuth(accessToken: string, sheetTab: string): Promise<string[]> {
+  const spreadsheetId = process.env.GOOGLE_SHEET_ID;
+  if (!spreadsheetId) throw new Error("GOOGLE_SHEET_ID is not set");
+
+  const sheets = getSheetsClient(accessToken);
+  const res = await sheets.spreadsheets.values.get({ 
+    spreadsheetId, 
+    range: `'${sheetTab}'!1:1` 
+  });
+
+  return (res.data.values?.[0] || []).map((h: any) => h.toString().trim());
+}
+
+// Get feedback column indices based on account name (Ahmed or Zoha)
+// Returns: { 1: colIndex for feedback 1, 2: colIndex for feedback 2, 3: colIndex for feedback 3 }
+export function getFeedbackColumnIndices(headers: string[], accountName: string): Record<number, number> {
+  const h = headers.map((x) => x.toString().trim().toLowerCase());
+  const name = accountName.toLowerCase();
+  
+  const findCol = (search: string) => h.findIndex((x) => x.includes(search));
+  
+  if (name.includes('ahmed')) {
+    return {
+      1: findCol('ahmed feedback 1'),
+      2: findCol('ahmed feedback 2'),
+      3: findCol('ahmed feedback 3'),
+    };
+  } else if (name.includes('zoha')) {
+    return {
+      1: findCol('zoha feedback 1'),
+      2: findCol('zoha feedback 2'),
+      3: findCol('zoha feedback 3'),
+    };
+  }
+  
+  // Default: try to find generic feedback columns
+  return {
+    1: findCol('feedback 1'),
+    2: findCol('feedback 2'),
+    3: findCol('feedback 3'),
+  };
+}
+
+// Update a single cell in Google Sheet - FIXED for multi-letter columns (AA, AB, AV, etc.)
 export async function updateSheetCell(
   accessToken: string,
   sheetTab: string,
@@ -239,8 +311,8 @@ export async function updateSheetCell(
 
   const sheets = getSheetsClient(accessToken);
   
-  // Convert 0-based columnIndex to A1 notation (A, B, C, etc)
-  const columnLetter = String.fromCharCode(65 + columnIndex);
+  // Use proper A1 notation for ALL column indices (including > 25)
+  const columnLetter = columnToA1(columnIndex);
   const cellAddress = `'${sheetTab}'!${columnLetter}${rowIndex}`;
   
   await sheets.spreadsheets.values.update({
