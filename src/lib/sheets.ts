@@ -151,10 +151,6 @@ export async function fetchContactData(
   for (let i = 1; i < rawRows.length; i++) {
     const row = rawRows[i];
 
-    // Only include rows with at least one owner mobile number
-    const owner1Mobile = columnIndices.owner1_mobile >= 0 ? (row[columnIndices.owner1_mobile] || "").toString() : "";
-    if (!owner1Mobile) continue;
-
     const getStringValue = (idx: number): string => {
       if (idx < 0) return "";
       return (row[idx] || "").toString().trim();
@@ -165,6 +161,8 @@ export async function fetchContactData(
       const val = (row[idx] || "").toString().trim();
       return parseFloat(val) || 0;
     };
+
+    const owner1Mobile = columnIndices.owner1_mobile >= 0 ? (row[columnIndices.owner1_mobile] || "").toString() : "";
 
     contacts.push({
       rowIndex: i + 1,
