@@ -99,6 +99,9 @@ export default function CampaignsPage() {
     zoha_feedback_1: [] as string[],
     zoha_feedback_2: [] as string[],
     zoha_feedback_3: [] as string[],
+    owner1Mobile: '' as string,
+    owner2Mobile: '' as string,
+    owner3Mobile: '' as string,
   });
 
   // Delay settings
@@ -299,7 +302,19 @@ export default function CampaignsPage() {
         matchFilter(filters.ahmed_feedback_3, contact.ahmed_feedback_3) &&
         matchFilter(filters.zoha_feedback_1, contact.zoha_feedback_1) &&
         matchFilter(filters.zoha_feedback_2, contact.zoha_feedback_2) &&
-        matchFilter(filters.zoha_feedback_3, contact.zoha_feedback_3);
+        matchFilter(filters.zoha_feedback_3, contact.zoha_feedback_3) &&
+        (!filters.owner1Mobile ||
+          (filters.owner1Mobile === 'blank' && (!contact.owner_1_mobile || String(contact.owner_1_mobile).trim() === '')) ||
+          (filters.owner1Mobile === 'zero' && String(contact.owner_1_mobile || '').trim() === '0') ||
+          (filters.owner1Mobile === 'nonblank' && contact.owner_1_mobile && String(contact.owner_1_mobile).trim() !== '' && String(contact.owner_1_mobile).trim() !== '0')) &&
+        (!filters.owner2Mobile ||
+          (filters.owner2Mobile === 'blank' && (!contact.owner_2_mobile || String(contact.owner_2_mobile).trim() === '')) ||
+          (filters.owner2Mobile === 'zero' && String(contact.owner_2_mobile || '').trim() === '0') ||
+          (filters.owner2Mobile === 'nonblank' && contact.owner_2_mobile && String(contact.owner_2_mobile).trim() !== '' && String(contact.owner_2_mobile).trim() !== '0')) &&
+        (!filters.owner3Mobile ||
+          (filters.owner3Mobile === 'blank' && (!contact.owner_3_mobile || String(contact.owner_3_mobile).trim() === '')) ||
+          (filters.owner3Mobile === 'zero' && String(contact.owner_3_mobile || '').trim() === '0') ||
+          (filters.owner3Mobile === 'nonblank' && contact.owner_3_mobile && String(contact.owner_3_mobile).trim() !== '' && String(contact.owner_3_mobile).trim() !== '0'));
 
       return matchSearch && matchFilters;
     });
@@ -819,7 +834,50 @@ export default function CampaignsPage() {
                 </div>
               </div>
 
-              <p className="text-sm text-gray-600 font-medium">
+              {/* Owner Mobile Filters */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mt-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Owner 1 Mobile</label>
+                  <select
+                    value={filters.owner1Mobile}
+                    onChange={(e) => setFilters({...filters, owner1Mobile: e.target.value})}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                  >
+                    <option value="">All</option>
+                    <option value="blank">Blank ({contacts.filter(c => !c.owner_1_mobile || String(c.owner_1_mobile).trim() === '').length})</option>
+                    <option value="zero">Zero - 0 ({contacts.filter(c => String(c.owner_1_mobile || '').trim() === '0').length})</option>
+                    <option value="nonblank">Non-blank ({contacts.filter(c => c.owner_1_mobile && String(c.owner_1_mobile).trim() !== '' && String(c.owner_1_mobile).trim() !== '0').length})</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Owner 2 Mobile</label>
+                  <select
+                    value={filters.owner2Mobile}
+                    onChange={(e) => setFilters({...filters, owner2Mobile: e.target.value})}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                  >
+                    <option value="">All</option>
+                    <option value="blank">Blank ({contacts.filter(c => !c.owner_2_mobile || String(c.owner_2_mobile).trim() === '').length})</option>
+                    <option value="zero">Zero - 0 ({contacts.filter(c => String(c.owner_2_mobile || '').trim() === '0').length})</option>
+                    <option value="nonblank">Non-blank ({contacts.filter(c => c.owner_2_mobile && String(c.owner_2_mobile).trim() !== '' && String(c.owner_2_mobile).trim() !== '0').length})</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Owner 3 Mobile</label>
+                  <select
+                    value={filters.owner3Mobile}
+                    onChange={(e) => setFilters({...filters, owner3Mobile: e.target.value})}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                  >
+                    <option value="">All</option>
+                    <option value="blank">Blank ({contacts.filter(c => !c.owner_3_mobile || String(c.owner_3_mobile).trim() === '').length})</option>
+                    <option value="zero">Zero - 0 ({contacts.filter(c => String(c.owner_3_mobile || '').trim() === '0').length})</option>
+                    <option value="nonblank">Non-blank ({contacts.filter(c => c.owner_3_mobile && String(c.owner_3_mobile).trim() !== '' && String(c.owner_3_mobile).trim() !== '0').length})</option>
+                  </select>
+                </div>
+              </div>
+
+              <p className="text-sm text-gray-600 font-medium mt-4">
                 Showing {filteredContacts.length} of {contacts.length} contacts
               </p>
             </div>
@@ -973,6 +1031,38 @@ export default function CampaignsPage() {
                       />
                       <LabelValue label="Listing Status" value={selectedContact.listing_status} />
                       <LabelValue label="Rental Contract Status" value={selectedContact.rental_contract_status} />
+                    </div>
+                  </section>
+                  {/* Feedback History */}
+                  <section>
+                    <h3 className="text-xl font-bold text-gray-900 mb-4 pb-2 border-b-2 border-purple-600">
+                      📋 Feedback History
+                    </h3>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div className="bg-orange-50 p-3 rounded-lg">
+                        <span className="text-gray-500 text-sm">Ahmed Feedback 1:</span>
+                        <p className="font-bold text-gray-900">{selectedContact.ahmed_feedback_1 || '—'}</p>
+                      </div>
+                      <div className="bg-orange-50 p-3 rounded-lg">
+                        <span className="text-gray-500 text-sm">Ahmed Feedback 2:</span>
+                        <p className="font-bold text-gray-900">{selectedContact.ahmed_feedback_2 || '—'}</p>
+                      </div>
+                      <div className="bg-orange-50 p-3 rounded-lg">
+                        <span className="text-gray-500 text-sm">Ahmed Feedback 3:</span>
+                        <p className="font-bold text-gray-900">{selectedContact.ahmed_feedback_3 || '—'}</p>
+                      </div>
+                      <div className="bg-pink-50 p-3 rounded-lg">
+                        <span className="text-gray-500 text-sm">Zoha Feedback 1:</span>
+                        <p className="font-bold text-gray-900">{selectedContact.zoha_feedback_1 || '—'}</p>
+                      </div>
+                      <div className="bg-pink-50 p-3 rounded-lg">
+                        <span className="text-gray-500 text-sm">Zoha Feedback 2:</span>
+                        <p className="font-bold text-gray-900">{selectedContact.zoha_feedback_2 || '—'}</p>
+                      </div>
+                      <div className="bg-pink-50 p-3 rounded-lg">
+                        <span className="text-gray-500 text-sm">Zoha Feedback 3:</span>
+                        <p className="font-bold text-gray-900">{selectedContact.zoha_feedback_3 || '—'}</p>
+                      </div>
                     </div>
                   </section>
                 </div>

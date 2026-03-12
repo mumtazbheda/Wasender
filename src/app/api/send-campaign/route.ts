@@ -207,10 +207,17 @@ export async function POST(request: NextRequest) {
           }
         }
 
-        await sql`UPDATE campaign_runs SET status = 'completed', completed_at = NOW(), sent_count = ${sentCount}, failed_count = ${failedCount} WHERE id = ${campaignId}`;
+        // Determine final status based on actual counts
+        const finalStatus = failedCount === 0 ? 'completed' : (sentCount === 0 ? 'failed' : 'partial');
+        await sql`UPDATE campaign_runs SET status = ${finalStatus}, completed_at = NOW(), sent_count = ${sentCount}, failed_count = ${failedCount} WHERE id = ${campaignId}`;
       } catch (err: any) {
         console.error('Campaign error:', err);
-        await sql`UPDATE campaign_runs SET status = 'failed' WHERE id = ${campaignId}`;
+        // Still save whatever counts we have
+        try {
+          await sql`UPDATE campaign_runs SET status = 'failed', completed_at = NOW(), sent_count = ${sentCount}, failed_count = ${failedCount} WHERE id = ${campaignId}`;
+        } catch (_) {
+          await sql`UPDATE campaign_runs SET status = 'failed', completed_at = NOW() WHERE id = ${campaignId}`;
+        }
       }
     })();
 

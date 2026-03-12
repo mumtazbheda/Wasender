@@ -97,11 +97,31 @@ function CampaignHistoryContent() {
   const getStatusBadge = (status: string) => {
     const styles: Record<string, string> = {
       completed: 'bg-green-100 text-green-800 border-green-200',
+      partial: 'bg-yellow-100 text-yellow-800 border-yellow-200',
       in_progress: 'bg-blue-100 text-blue-800 border-blue-200',
       failed: 'bg-red-100 text-red-800 border-red-200',
       pending: 'bg-gray-100 text-gray-800 border-gray-200',
     };
     return styles[status] || styles.pending;
+  };
+
+  const getStatusLabel = (status: string) => {
+    const labels: Record<string, string> = {
+      completed: '✅ Completed',
+      partial: '⚠️ Partial',
+      in_progress: '⏳ In Progress',
+      failed: '❌ Failed',
+      pending: '⏳ Pending',
+    };
+    return labels[status] || status;
+  };
+
+  const handleRerun = (campaign: Campaign) => {
+    const params = new URLSearchParams();
+    params.set('rerun', 'true');
+    if (campaign.sheet_tab) params.set('sheet', campaign.sheet_tab);
+    if (campaign.template_name) params.set('template', campaign.template_name);
+    window.location.href = `/campaigns?${params.toString()}`;
   };
 
   const filteredMessages = messages.filter(m => {
@@ -133,11 +153,17 @@ function CampaignHistoryContent() {
                 <h1 className="text-2xl font-bold text-gray-900">{selectedCampaign.name || 'Unnamed Campaign'}</h1>
                 <p className="text-gray-500 mt-1">Created: {new Date(selectedCampaign.created_at).toLocaleString()}</p>
               </div>
-              <span className={`px-4 py-2 rounded-full text-sm font-bold border ${getStatusBadge(selectedCampaign.status)}`}>
-                {selectedCampaign.status === 'in_progress' ? '⏳ In Progress' :
-                 selectedCampaign.status === 'completed' ? '✅ Completed' :
-                 selectedCampaign.status === 'failed' ? '❌ Failed' : selectedCampaign.status}
-              </span>
+              <div className="flex gap-2 items-center">
+                <span className={`px-4 py-2 rounded-full text-sm font-bold border ${getStatusBadge(selectedCampaign.status)}`}>
+                  {getStatusLabel(selectedCampaign.status)}
+                </span>
+                <button
+                  onClick={() => handleRerun(selectedCampaign)}
+                  className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-bold"
+                >
+                  🔄 Re-run
+                </button>
+              </div>
             </div>
 
             {/* Stats Grid */}
@@ -332,13 +358,11 @@ function CampaignHistoryContent() {
                     </p>
                   </div>
                   <span className={`px-3 py-1 rounded-full text-xs font-bold border flex-shrink-0 ${getStatusBadge(campaign.status)}`}>
-                    {campaign.status === 'in_progress' ? '⏳ In Progress' :
-                     campaign.status === 'completed' ? '✅ Completed' :
-                     campaign.status === 'failed' ? '❌ Failed' : campaign.status}
+                    {getStatusLabel(campaign.status)}
                   </span>
                 </div>
 
-                <div className="flex flex-wrap gap-4 mt-3 text-sm">
+                <div className="flex flex-wrap gap-4 mt-3 text-sm items-center">
                   <span className="text-blue-600">📧 Total: <b>{campaign.total_unique_phones || campaign.total_contacts}</b></span>
                   <span className="text-green-600">✅ Sent: <b>{campaign.sent_count}</b></span>
                   <span className="text-red-600">❌ Failed: <b>{campaign.failed_count}</b></span>
@@ -358,6 +382,15 @@ function CampaignHistoryContent() {
                     </div>
                   </div>
                 )}
+
+                <div className="flex gap-2 mt-3">
+                  <button
+                    onClick={(e) => { e.stopPropagation(); handleRerun(campaign); }}
+                    className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-bold"
+                  >
+                    🔄 Re-run
+                  </button>
+                </div>
               </div>
             ))}
           </div>

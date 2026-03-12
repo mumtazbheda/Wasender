@@ -119,8 +119,8 @@ export default function AccountsPage() {
     const payload = {
       name: formName,
       phone: formPhone,
-      accessToken: formApiKey,
-      account_type: formType,
+      apiKey: formApiKey,
+      accountType: formType,
       businessAccountId: formType === "whatsapp_business" ? formBusinessId : "N/A",
       phoneNumberId: formType === "whatsapp_business" ? formPhoneNumberId : "N/A",
     };

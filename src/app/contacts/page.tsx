@@ -262,6 +262,9 @@ export default function ContactsPage() {
     zoha_feedback_1: [] as string[],
     zoha_feedback_2: [] as string[],
     zoha_feedback_3: [] as string[],
+    owner1Mobile: '' as string,
+    owner2Mobile: '' as string,
+    owner3Mobile: '' as string,
   });
 
   // ─── Load sheets on mount ─────────────────────────────────────────────────
@@ -494,7 +497,19 @@ export default function ContactsPage() {
         mf(filters.ahmed_feedback_3, contact.ahmed_feedback_3) &&
         mf(filters.zoha_feedback_1, contact.zoha_feedback_1) &&
         mf(filters.zoha_feedback_2, contact.zoha_feedback_2) &&
-        mf(filters.zoha_feedback_3, contact.zoha_feedback_3);
+        mf(filters.zoha_feedback_3, contact.zoha_feedback_3) &&
+        (!filters.owner1Mobile ||
+          (filters.owner1Mobile === 'blank' && (!contact.owner_1_mobile || String(contact.owner_1_mobile).trim() === '')) ||
+          (filters.owner1Mobile === 'zero' && String(contact.owner_1_mobile || '').trim() === '0') ||
+          (filters.owner1Mobile === 'nonblank' && contact.owner_1_mobile && String(contact.owner_1_mobile).trim() !== '' && String(contact.owner_1_mobile).trim() !== '0')) &&
+        (!filters.owner2Mobile ||
+          (filters.owner2Mobile === 'blank' && (!contact.owner_2_mobile || String(contact.owner_2_mobile).trim() === '')) ||
+          (filters.owner2Mobile === 'zero' && String(contact.owner_2_mobile || '').trim() === '0') ||
+          (filters.owner2Mobile === 'nonblank' && contact.owner_2_mobile && String(contact.owner_2_mobile).trim() !== '' && String(contact.owner_2_mobile).trim() !== '0')) &&
+        (!filters.owner3Mobile ||
+          (filters.owner3Mobile === 'blank' && (!contact.owner_3_mobile || String(contact.owner_3_mobile).trim() === '')) ||
+          (filters.owner3Mobile === 'zero' && String(contact.owner_3_mobile || '').trim() === '0') ||
+          (filters.owner3Mobile === 'nonblank' && contact.owner_3_mobile && String(contact.owner_3_mobile).trim() !== '' && String(contact.owner_3_mobile).trim() !== '0'));
 
       return matchSearch && matchFilters;
     });
@@ -1079,6 +1094,43 @@ export default function ContactsPage() {
               </div>
             </div>
 
+            {/* Owner Mobile Filters */}
+            <div className="mt-4">
+              <h4 className="text-sm font-bold text-gray-700 mb-2">📱 Owner Mobile Filters</h4>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <div>
+                  <label className="block text-xs font-bold text-gray-600 mb-1">Owner 1 Mobile</label>
+                  <select value={filters.owner1Mobile} onChange={(e) => setFilters({...filters, owner1Mobile: e.target.value})}
+                    className="w-full border rounded-lg px-3 py-2 text-sm bg-white">
+                    <option value="">All</option>
+                    <option value="blank">Blank ({contacts.filter(c => !c.owner_1_mobile || String(c.owner_1_mobile).trim() === '').length})</option>
+                    <option value="zero">Zero - 0 ({contacts.filter(c => String(c.owner_1_mobile || '').trim() === '0').length})</option>
+                    <option value="nonblank">Non-blank ({contacts.filter(c => c.owner_1_mobile && String(c.owner_1_mobile).trim() !== '' && String(c.owner_1_mobile).trim() !== '0').length})</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-gray-600 mb-1">Owner 2 Mobile</label>
+                  <select value={filters.owner2Mobile} onChange={(e) => setFilters({...filters, owner2Mobile: e.target.value})}
+                    className="w-full border rounded-lg px-3 py-2 text-sm bg-white">
+                    <option value="">All</option>
+                    <option value="blank">Blank ({contacts.filter(c => !c.owner_2_mobile || String(c.owner_2_mobile).trim() === '').length})</option>
+                    <option value="zero">Zero - 0 ({contacts.filter(c => String(c.owner_2_mobile || '').trim() === '0').length})</option>
+                    <option value="nonblank">Non-blank ({contacts.filter(c => c.owner_2_mobile && String(c.owner_2_mobile).trim() !== '' && String(c.owner_2_mobile).trim() !== '0').length})</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-gray-600 mb-1">Owner 3 Mobile</label>
+                  <select value={filters.owner3Mobile} onChange={(e) => setFilters({...filters, owner3Mobile: e.target.value})}
+                    className="w-full border rounded-lg px-3 py-2 text-sm bg-white">
+                    <option value="">All</option>
+                    <option value="blank">Blank ({contacts.filter(c => !c.owner_3_mobile || String(c.owner_3_mobile).trim() === '').length})</option>
+                    <option value="zero">Zero - 0 ({contacts.filter(c => String(c.owner_3_mobile || '').trim() === '0').length})</option>
+                    <option value="nonblank">Non-blank ({contacts.filter(c => c.owner_3_mobile && String(c.owner_3_mobile).trim() !== '' && String(c.owner_3_mobile).trim() !== '0').length})</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+
             <p className="mt-4 text-sm text-gray-600 font-medium">
               Showing {filteredContacts.length} of {contacts.length} contacts
             </p>
@@ -1489,6 +1541,37 @@ export default function ContactsPage() {
                   💬 WhatsApp
                 </button>
               </div>
+
+                {/* 📋 Feedback History */}
+                <div className="mt-6 bg-gradient-to-r from-purple-50 to-pink-50 rounded-xl p-4">
+                  <h4 className="font-bold text-purple-800 mb-3">📋 Feedback History</h4>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-sm">
+                    <div className="bg-white p-3 rounded-lg">
+                      <span className="text-gray-500">Ahmed Feedback 1:</span>
+                      <span className="ml-2 font-bold text-gray-900">{selectedContact?.ahmed_feedback_1 || '—'}</span>
+                    </div>
+                    <div className="bg-white p-3 rounded-lg">
+                      <span className="text-gray-500">Ahmed Feedback 2:</span>
+                      <span className="ml-2 font-bold text-gray-900">{selectedContact?.ahmed_feedback_2 || '—'}</span>
+                    </div>
+                    <div className="bg-white p-3 rounded-lg">
+                      <span className="text-gray-500">Ahmed Feedback 3:</span>
+                      <span className="ml-2 font-bold text-gray-900">{selectedContact?.ahmed_feedback_3 || '—'}</span>
+                    </div>
+                    <div className="bg-white p-3 rounded-lg">
+                      <span className="text-gray-500">Zoha Feedback 1:</span>
+                      <span className="ml-2 font-bold text-gray-900">{selectedContact?.zoha_feedback_1 || '—'}</span>
+                    </div>
+                    <div className="bg-white p-3 rounded-lg">
+                      <span className="text-gray-500">Zoha Feedback 2:</span>
+                      <span className="ml-2 font-bold text-gray-900">{selectedContact?.zoha_feedback_2 || '—'}</span>
+                    </div>
+                    <div className="bg-white p-3 rounded-lg">
+                      <span className="text-gray-500">Zoha Feedback 3:</span>
+                      <span className="ml-2 font-bold text-gray-900">{selectedContact?.zoha_feedback_3 || '—'}</span>
+                    </div>
+                  </div>
+                </div>
             </div>
           </div>
         )}
