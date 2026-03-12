@@ -57,6 +57,16 @@ interface Contact {
   available_from: string;
   view: string;
   project_name_en?: string;
+  bayut_rent: string;
+  bayut_sale: string;
+  pf_rent: string;
+  pf_sale: string;
+  bayut_rent_prices: string;
+  bayut_sale_prices: string;
+  pf_rent_prices: string;
+  pf_sale_prices: string;
+  bayut_links: string;
+  pf_links: string;
 }
 
 interface Template {
