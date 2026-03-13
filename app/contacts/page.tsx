@@ -273,7 +273,7 @@ export default function ContactsPage() {
   const [selectedWhatsappAccount, setSelectedWhatsappAccount] = useState<number | null>(null);
   const [selectedWhatsappTemplate, setSelectedWhatsappTemplate] = useState<string | null>(null);
   const [whatsappAccounts, setWhatsappAccounts] = useState<Account[]>([]);
-  const [whatsappTemplates, setWhatsappTemplates] = useState<Template[]>([]);
+  const [templates, setTemplates] = useState<Template[]>([]);
   const [whatsappSelection, setWhatsappSelection] = useState<{
     ownerNumber: 1 | 2 | 3;
     phone: string;
@@ -751,7 +751,7 @@ export default function ContactsPage() {
         // Load templates
         const tplRes = await fetch("/api/templates");
         const tplData = await tplRes.json();
-        setWhatsappTemplates(tplData.templates || []);
+        setTemplates(tplData.templates || []);
       } catch (err) {
         console.error("Failed to load accounts/templates:", err);
       }
@@ -777,7 +777,7 @@ export default function ContactsPage() {
                     ownerNum === 2 ? selectedContact.owner2_mobile :
                     selectedContact.owner3_mobile;
 
-      const template = whatsappTemplates.find(t => String(t.id) === templateId);
+      const template = templates.find(t => String(t.id) === templateId);
       
       if (phone && template) {
         const cleanPhone = phone.replace(/[^0-9]/g, '');
@@ -813,7 +813,7 @@ export default function ContactsPage() {
       }
     };
 
-    const selectedTemplate = whatsappTemplates.find(t => String(t.id) === String(selectedWhatsappTemplate));
+    const selectedTemplate = templates.find(t => String(t.id) === String(selectedWhatsappTemplate));
     const selectedAccount = whatsappAccounts.find(a => a.id === selectedWhatsappAccount);
     const selectedOwnerData = selectedWhatsappOwner === 1 ? { name: selectedContact.owner1_name, phone: selectedContact.owner1_mobile } :
                               selectedWhatsappOwner === 2 ? { name: selectedContact.owner2_name, phone: selectedContact.owner2_mobile } :
@@ -902,8 +902,8 @@ export default function ContactsPage() {
               </div>
               
               <div className="space-y-2 mb-6">
-                {whatsappTemplates.length > 0 ? (
-                  whatsappTemplates.map((template) => (
+                {templates.length > 0 ? (
+                  templates.map((template) => (
                     <button
                       key={template.id}
                       onClick={() => handleSelectTemplate(String(template.id))}
