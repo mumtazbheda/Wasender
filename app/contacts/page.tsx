@@ -875,9 +875,8 @@ export default function ContactsPage() {
                       onClick={() => handleSelectAccount(account.id)}
                       className="w-full p-3 border-2 border-gray-300 rounded-lg hover:border-blue-500 hover:bg-blue-50 transition text-left"
                     >
-                      <div className="font-medium text-gray-900">{account.account_name}</div>
-                      <div className="text-sm text-gray-600">{account.primary_email}</div>
-                      <div className="text-sm text-blue-600 font-mono">{account.phone_number}</div>
+                      <div className="font-medium text-gray-900">{account.name}</div>
+                      <div className="text-sm text-blue-600 font-mono">{account.phone}</div>
                     </button>
                   ))
                 ) : (
@@ -897,7 +896,7 @@ export default function ContactsPage() {
                   <span className="font-bold text-gray-700">Owner:</span> {selectedOwnerData.name}
                 </div>
                 <div className="text-xs bg-gray-100 p-2 rounded">
-                  <span className="font-bold text-gray-700">Account:</span> {selectedAccount?.account_name}
+                  <span className="font-bold text-gray-700">Account:</span> {selectedAccount?.name}
                 </div>
               </div>
               
