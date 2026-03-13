@@ -266,10 +266,6 @@ export default function ContactsPage() {
     ownerNumber: 1 | 2 | 3;
     phone: string;
   } | null>(null);
-  const [selectedWhatsappOwner, setSelectedWhatsappOwner] = useState<1 | 2 | 3>(1);
-  const [selectedMobile, setSelectedMobile] = useState<string>("");
-  const [templates, setTemplates] = useState<Template[]>([]);
-  const [selectedTemplate, setSelectedTemplate] = useState<string>("");
   const [sortOrder, setSortOrder] = useState<SortOrder>("none");
 
   // Cache state
