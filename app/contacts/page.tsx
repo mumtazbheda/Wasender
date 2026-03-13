@@ -1,7 +1,5 @@
 "use client";
 
-export const dynamic = "force-dynamic";
-
 import { useEffect, useState } from "react";
 import { signIn, useSession } from "next-auth/react";
 
@@ -256,7 +254,9 @@ function isUAEPhone(phone: string): boolean {
 }
 
 export default function ContactsPage() {
-  const { data: session, status } = useSession();
+  const sessionResult = useSession();
+  const session = sessionResult?.data;
+  const status = sessionResult?.status ?? "loading";
   const [selectedSheet, setSelectedSheet] = useState<string>("");
   const [sheets, setSheets] = useState<string[]>([]);
   const [sheetsLoading, setSheetsLoading] = useState(false);
