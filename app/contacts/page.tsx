@@ -75,6 +75,18 @@ interface Template {
   body: string;
 }
 
+interface Account {
+  id: number;
+  name: string;
+  phone: string;
+  api_key: string;
+  account_type: string;
+  business_account_id: string;
+  phone_number_id: string;
+  status: string;
+  connected_at: string;
+}
+
 type SortOrder = "none" | "low-to-high" | "high-to-low";
 
 // ─── Column mapping for Google Sheet edits ─────────────────────────────────
