@@ -75,6 +75,18 @@ interface Template {
   body: string;
 }
 
+interface Account {
+  id: number;
+  name: string;
+  phone: string;
+  api_key: string;
+  account_type: string;
+  business_account_id: string;
+  phone_number_id: string;
+  status: string;
+  connected_at: string;
+}
+
 type SortOrder = "none" | "low-to-high" | "high-to-low";
 
 // ─── Column mapping for Google Sheet edits ─────────────────────────────────
@@ -242,7 +254,9 @@ function isUAEPhone(phone: string): boolean {
 }
 
 export default function ContactsPage() {
-  const { data: session, status } = useSession();
+  const sessionResult = useSession();
+  const session = sessionResult?.data;
+  const status = sessionResult?.status ?? "loading";
   const [selectedSheet, setSelectedSheet] = useState<string>("");
   const [sheets, setSheets] = useState<string[]>([]);
   const [sheetsLoading, setSheetsLoading] = useState(false);
@@ -256,14 +270,16 @@ export default function ContactsPage() {
   const [openSections, setOpenSections] = useState<Record<string, boolean>>({});
   const toggleSection = (key: string) => setOpenSections(prev => ({ ...prev, [key]: prev[key] === false ? true : false }));
   const [showWhatsAppModal, setShowWhatsAppModal] = useState(false);
+  const [whatsappStep, setWhatsappStep] = useState<1 | 2 | 3>(1);
+  const [selectedWhatsappOwner, setSelectedWhatsappOwner] = useState<1 | 2 | 3 | null>(null);
+  const [selectedWhatsappAccount, setSelectedWhatsappAccount] = useState<number | null>(null);
+  const [selectedWhatsappTemplate, setSelectedWhatsappTemplate] = useState<string | null>(null);
+  const [whatsappAccounts, setWhatsappAccounts] = useState<Account[]>([]);
+  const [templates, setTemplates] = useState<Template[]>([]);
   const [whatsappSelection, setWhatsappSelection] = useState<{
     ownerNumber: 1 | 2 | 3;
     phone: string;
   } | null>(null);
-  const [selectedWhatsappOwner, setSelectedWhatsappOwner] = useState<1 | 2 | 3>(1);
-  const [selectedMobile, setSelectedMobile] = useState<string>("");
-  const [templates, setTemplates] = useState<Template[]>([]);
-  const [selectedTemplate, setSelectedTemplate] = useState<string>("");
   const [sortOrder, setSortOrder] = useState<SortOrder>("none");
 
   // Cache state
@@ -727,48 +743,193 @@ export default function ContactsPage() {
       { num: 3, name: selectedContact.owner3_name, phone: selectedContact.owner3_mobile },
     ].filter(o => o.phone);
 
-    const handleOpenWhatsApp = (ownerNum: 1 | 2 | 3, phone: string) => {
-      const cleanPhone = phone.replace(/[^0-9]/g, '');
-      if (cleanPhone) {
-        window.open(`https://wa.me/${cleanPhone}`, '_blank');
+    const handleLoadAccountsAndTemplates = async () => {
+      try {
+        // Load accounts
+        const accRes = await fetch("/api/accounts");
+        const accData = await accRes.json();
+        setWhatsappAccounts(accData.accounts || []);
+
+        // Load templates
+        const tplRes = await fetch("/api/templates");
+        const tplData = await tplRes.json();
+        setTemplates(tplData.templates || []);
+      } catch (err) {
+        console.error("Failed to load accounts/templates:", err);
       }
-      setShowWhatsAppModal(false);
-      setSelectedWhatsappOwner(1);
     };
+
+    const handleSelectOwner = (ownerNum: 1 | 2 | 3) => {
+      setSelectedWhatsappOwner(ownerNum);
+      handleLoadAccountsAndTemplates();
+      setWhatsappStep(2);
+    };
+
+    const handleSelectAccount = (accountId: number) => {
+      setSelectedWhatsappAccount(accountId);
+      setWhatsappStep(3);
+    };
+
+    const handleSelectTemplate = async (templateId: string) => {
+      setSelectedWhatsappTemplate(templateId);
+      
+      // Get owner phone and send message
+      const ownerNum = selectedWhatsappOwner;
+      const phone = ownerNum === 1 ? selectedContact.owner1_mobile :
+                    ownerNum === 2 ? selectedContact.owner2_mobile :
+                    selectedContact.owner3_mobile;
+
+      const template = templates.find(t => String(t.id) === templateId);
+      
+      if (phone && template) {
+        const cleanPhone = phone.replace(/[^0-9]/g, '');
+        const messageText = template.body;
+        
+        // Open WhatsApp with template text
+        const encodedMessage = encodeURIComponent(messageText);
+        window.open(`https://wa.me/${cleanPhone}?text=${encodedMessage}`, '_blank');
+        
+        // TODO: Record in database that message was sent from account
+        // Optional: await fetch('/api/send-message', { method: 'POST', body: JSON.stringify({...}) })
+      }
+      
+      // Close modal and reset
+      setShowWhatsAppModal(false);
+      setWhatsappStep(1);
+      setSelectedWhatsappOwner(null);
+      setSelectedWhatsappAccount(null);
+      setSelectedWhatsappTemplate(null);
+    };
+
+    const handleBack = () => {
+      if (whatsappStep === 1) {
+        setShowWhatsAppModal(false);
+        setWhatsappStep(1);
+        setSelectedWhatsappOwner(null);
+        setSelectedWhatsappAccount(null);
+        setSelectedWhatsappTemplate(null);
+      } else {
+        setWhatsappStep((whatsappStep - 1) as 1 | 2 | 3);
+        if (whatsappStep === 3) setSelectedWhatsappTemplate(null);
+        if (whatsappStep === 2) setSelectedWhatsappAccount(null);
+      }
+    };
+
+    const selectedTemplate = templates.find(t => String(t.id) === String(selectedWhatsappTemplate));
+    const selectedAccount = whatsappAccounts.find(a => a.id === selectedWhatsappAccount);
+    const selectedOwnerData = selectedWhatsappOwner === 1 ? { name: selectedContact.owner1_name, phone: selectedContact.owner1_mobile } :
+                              selectedWhatsappOwner === 2 ? { name: selectedContact.owner2_name, phone: selectedContact.owner2_mobile } :
+                              { name: selectedContact.owner3_name, phone: selectedContact.owner3_mobile };
 
     return (
       <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-        <div className="bg-white rounded-lg p-6 max-w-sm w-full mx-4 shadow-lg">
-          <h2 className="text-xl font-bold mb-4 text-gray-900">📱 Select Owner to Message</h2>
-          <p className="text-sm text-gray-600 mb-4">Which owner would you like to send a WhatsApp message to?</p>
-          
-          <div className="space-y-2 mb-6">
-            {availableOwners.length > 0 ? (
-              availableOwners.map((owner) => (
-                <button
-                  key={owner.num}
-                  onClick={() => handleOpenWhatsApp(owner.num as 1 | 2 | 3, owner.phone)}
-                  className="w-full p-3 border-2 border-gray-300 rounded-lg hover:border-green-500 hover:bg-green-50 transition text-left"
-                >
-                  <div className="font-medium text-gray-900">Owner {owner.num}</div>
-                  <div className="text-sm text-gray-600">{owner.name || 'N/A'}</div>
-                  <div className="text-sm text-green-600 font-mono">{owner.phone}</div>
-                </button>
-              ))
-            ) : (
-              <p className="text-gray-500 text-sm">No phone numbers available for this contact</p>
-            )}
+        <div className="bg-white rounded-lg p-6 max-w-2xl w-full mx-4 shadow-lg max-h-[90vh] overflow-y-auto">
+          {/* Progress indicator */}
+          <div className="flex items-center justify-between mb-6">
+            <div className="flex items-center gap-2">
+              <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold transition ${whatsappStep >= 1 ? 'bg-green-500 text-white' : 'bg-gray-300 text-gray-600'}`}>1</div>
+              <span className={`text-sm font-medium ${whatsappStep >= 1 ? 'text-green-600' : 'text-gray-500'}`}>Owner</span>
+              <div className={`flex-1 h-1 mx-2 transition ${whatsappStep >= 2 ? 'bg-green-500' : 'bg-gray-300'}`}></div>
+              <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold transition ${whatsappStep >= 2 ? 'bg-green-500 text-white' : 'bg-gray-300 text-gray-600'}`}>2</div>
+              <span className={`text-sm font-medium ${whatsappStep >= 2 ? 'text-green-600' : 'text-gray-500'}`}>Account</span>
+              <div className={`flex-1 h-1 mx-2 transition ${whatsappStep >= 3 ? 'bg-green-500' : 'bg-gray-300'}`}></div>
+              <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold transition ${whatsappStep >= 3 ? 'bg-green-500 text-white' : 'bg-gray-300 text-gray-600'}`}>3</div>
+              <span className={`text-sm font-medium ${whatsappStep >= 3 ? 'text-green-600' : 'text-gray-500'}`}>Template</span>
+            </div>
           </div>
 
-          <button
-            onClick={() => {
-              setShowWhatsAppModal(false);
-              setSelectedWhatsappOwner(1);
-            }}
-            className="w-full px-4 py-2 bg-gray-300 hover:bg-gray-400 text-gray-900 rounded-lg transition font-medium"
-          >
-            Cancel
-          </button>
+          {/* Step 1: Select Owner */}
+          {whatsappStep === 1 && (
+            <>
+              <h2 className="text-xl font-bold mb-2 text-gray-900">📱 Step 1: Select Owner</h2>
+              <p className="text-sm text-gray-600 mb-4">Which owner would you like to send a WhatsApp message to?</p>
+              <div className="space-y-2 mb-6">
+                {availableOwners.length > 0 ? (
+                  availableOwners.map((owner) => (
+                    <button
+                      key={owner.num}
+                      onClick={() => handleSelectOwner(owner.num as 1 | 2 | 3)}
+                      className="w-full p-3 border-2 border-gray-300 rounded-lg hover:border-green-500 hover:bg-green-50 transition text-left"
+                    >
+                      <div className="font-medium text-gray-900">Owner {owner.num}</div>
+                      <div className="text-sm text-gray-600">{owner.name || 'N/A'}</div>
+                      <div className="text-sm text-green-600 font-mono">{owner.phone}</div>
+                    </button>
+                  ))
+                ) : (
+                  <p className="text-gray-500 text-sm">No phone numbers available</p>
+                )}
+              </div>
+            </>
+          )}
+
+          {/* Step 2: Select Account */}
+          {whatsappStep === 2 && (
+            <>
+              <h2 className="text-xl font-bold mb-2 text-gray-900">👤 Step 2: Select Account</h2>
+              <p className="text-sm text-gray-600 mb-2">Which account should send this message?</p>
+              <p className="text-xs text-gray-500 mb-4">Selected Owner: <span className="font-bold text-gray-700">{selectedOwnerData.name || 'N/A'}</span></p>
+              <div className="space-y-2 mb-6">
+                {whatsappAccounts.length > 0 ? (
+                  whatsappAccounts.map((account) => (
+                    <button
+                      key={account.id}
+                      onClick={() => handleSelectAccount(account.id)}
+                      className="w-full p-3 border-2 border-gray-300 rounded-lg hover:border-blue-500 hover:bg-blue-50 transition text-left"
+                    >
+                      <div className="font-medium text-gray-900">{account.name}</div>
+                      <div className="text-sm text-blue-600 font-mono">{account.phone}</div>
+                    </button>
+                  ))
+                ) : (
+                  <p className="text-gray-500 text-sm">No accounts available</p>
+                )}
+              </div>
+            </>
+          )}
+
+          {/* Step 3: Select Template */}
+          {whatsappStep === 3 && (
+            <>
+              <h2 className="text-xl font-bold mb-2 text-gray-900">📝 Step 3: Select Template</h2>
+              <p className="text-sm text-gray-600 mb-2">Choose a message template to send</p>
+              <div className="grid grid-cols-2 gap-2 mb-6">
+                <div className="text-xs bg-gray-100 p-2 rounded">
+                  <span className="font-bold text-gray-700">Owner:</span> {selectedOwnerData.name}
+                </div>
+                <div className="text-xs bg-gray-100 p-2 rounded">
+                  <span className="font-bold text-gray-700">Account:</span> {selectedAccount?.name}
+                </div>
+              </div>
+              
+              <div className="space-y-2 mb-6">
+                {templates.length > 0 ? (
+                  templates.map((template) => (
+                    <button
+                      key={template.id}
+                      onClick={() => handleSelectTemplate(String(template.id))}
+                      className="w-full p-3 border-2 border-gray-300 rounded-lg hover:border-purple-500 hover:bg-purple-50 transition text-left"
+                    >
+                      <div className="font-medium text-gray-900">{template.name}</div>
+                      <div className="text-sm text-gray-600 line-clamp-2">{template.body}</div>
+                    </button>
+                  ))
+                ) : (
+                  <p className="text-gray-500 text-sm">No templates available. Please create one first.</p>
+                )}
+              </div>
+            </>
+          )}
+
+          {/* Navigation buttons */}
+          <div className="flex gap-3">
+            <button
+              onClick={handleBack}
+              className="flex-1 px-4 py-2 bg-gray-300 hover:bg-gray-400 text-gray-900 rounded-lg transition font-medium"
+            >
+              {whatsappStep === 1 ? 'Cancel' : 'Back'}
+            </button>
+          </div>
         </div>
       </div>
     );
@@ -1429,7 +1590,7 @@ export default function ContactsPage() {
                   <LabelValue label="Rent Duration" value={selectedContact.rent_duration || "—"} />
                   <LabelValue label="Days Remaining" value={selectedContact.rent_end_date ? <span className={`font-bold ${calculateDaysRemaining(selectedContact.rent_end_date).days < 30 ? "text-red-600" : calculateDaysRemaining(selectedContact.rent_end_date).days < 90 ? "text-yellow-600" : "text-green-600"}`}>{calculateDaysRemaining(selectedContact.rent_end_date).text}</span> : "—"} />
                   <LabelValue label="Rental Status Date" value={selectedContact.rental_status_date || "—"} />
-                  <LabelValue label="Rental Contract Status" value={selectedContact.rental_contract_status || "—"} />
+                  <LabelValue label="Contract A" value={selectedContact.contract_a || "—"} />
                   <LabelValue label="Rental Months Pending/Expired" value={selectedContact.rental_months_pending_expired || "—"} />
                   <LabelValue label="Rental Cheques" value={selectedContact.rental_cheques || "—"} />
                 </ViewSection>
