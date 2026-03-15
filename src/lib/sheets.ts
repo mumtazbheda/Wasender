@@ -125,7 +125,7 @@ function detectColumns(headers: string[]) {
     listing_link: findByName(["listing link"]),
     owner_dob: findByName(["dob", "date of birth"]),
     crm_listing_link: findByName(["crm", "crm link"]),
-    contract_a: findByName(["contract"]),
+    contract_a: h.findIndex(x => x === "contract" || x === "contract_a"),
     rental_cheques: findByName(["cheque", "cheques"]),
     available_from: findByName(["available"]),
     view: findByName(["view"]),

@@ -45,7 +45,7 @@ export default function SendMessagePage() {
       const cleanPhone = phone.replace(/[^0-9]/g, "");
 
       // Try WAsender API first
-      const res = await fetch("/api/send-test", {
+      const res = await fetch("/api/send-test-message", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -111,7 +111,7 @@ export default function SendMessagePage() {
         <div>
           <label className="block text-sm font-bold text-gray-700 mb-1">Phone Number</label>
           <input
-            type="tel"
+            type="text"
             className="w-full border rounded-lg px-4 py-3 text-sm"
             placeholder="971501234567 (digits only)"
             value={phone}
