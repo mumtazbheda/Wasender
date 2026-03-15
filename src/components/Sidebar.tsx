@@ -13,6 +13,7 @@ const Sidebar = () => {
   const menuItems = [
     { name: "Dashboard", path: "/", icon: "📊" },
     { name: "Contacts", path: "/contacts", icon: "👥" },
+    { name: "Statistics", path: "/statistics", icon: "📈" },
     { name: "New Campaign", path: "/campaigns", icon: "🚀" },
     { name: "Campaign History", path: "/campaign-history", icon: "📋" },
     { name: "Accounts", path: "/accounts", icon: "📱" },
