@@ -152,6 +152,10 @@ export default function CampaignsPage() {
   // Browser-driven campaign processing (Vercel Hobby compatible)
   const [rerunModal, setRerunModal] = useState<{ campaign: any } | null>(null);
 
+  // Server-side DB cache state
+  const [savedSheets, setSavedSheets] = useState<{ sheet_name: string; contact_count: number; synced_at: string }[]>([]);
+  const [usingServerCache, setUsingServerCache] = useState(false);
+
   // Load sheets
   useEffect(() => {
     const loadSheets = async () => {
@@ -232,6 +236,18 @@ export default function CampaignsPage() {
     loadHistory();
   }, []);
 
+  // Load list of server-saved sheets
+  useEffect(() => {
+    const loadSavedSheets = async () => {
+      try {
+        const res = await fetch('/api/contacts-cache');
+        const data = await res.json();
+        if (data.success) setSavedSheets(data.sheets || []);
+      } catch {}
+    };
+    loadSavedSheets();
+  }, []);
+
   // Load contacts from sheet
   const loadContacts = async () => {
     if (!selectedSheet) {
@@ -257,6 +273,29 @@ export default function CampaignsPage() {
       setError("Error loading contacts: " + (err instanceof Error ? err.message : "Unknown error"));
       setContacts([]);
       console.error("Failed to load contacts:", err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Load contacts from server-side DB cache
+  const loadFromServerCache = async (sheetName: string) => {
+    setLoading(true);
+    setError("");
+    try {
+      const res = await fetch(`/api/contacts-cache?sheet=${encodeURIComponent(sheetName)}`);
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        setError(data.error || "Failed to load from server database");
+        return;
+      }
+      setContacts(data.contacts || []);
+      setSelectedContacts(new Set());
+      setSelectedSheet(sheetName);
+      setUsingServerCache(true);
+      setError("");
+    } catch (err) {
+      setError("Error loading from server: " + (err instanceof Error ? err.message : "Unknown error"));
     } finally {
       setLoading(false);
     }
@@ -575,14 +614,47 @@ export default function CampaignsPage() {
 
           {/* Controls Section */}
           <div className="bg-white rounded-lg shadow-md p-6 mb-6">
+            {/* View Saved Server Data */}
+            {savedSheets.length > 0 && (
+              <div className="mb-4 p-3 bg-indigo-50 border border-indigo-200 rounded-lg">
+                <p className="text-sm font-bold text-indigo-800 mb-2">📦 View Saved Data</p>
+                <div className="flex flex-wrap gap-2">
+                  {savedSheets.map((s) => (
+                    <button
+                      key={s.sheet_name}
+                      onClick={() => loadFromServerCache(s.sheet_name)}
+                      disabled={loading}
+                      className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 disabled:bg-gray-400 text-white rounded-lg text-sm font-medium transition flex items-center gap-1"
+                    >
+                      <span>{s.sheet_name}</span>
+                      <span className="text-indigo-200 text-xs">({s.contact_count})</span>
+                    </button>
+                  ))}
+                </div>
+                <p className="text-xs text-indigo-600 mt-1">Click to load contacts from server database (no Google login needed)</p>
+              </div>
+            )}
+
+            {usingServerCache && (
+              <div className="mb-3 p-3 bg-indigo-50 border border-indigo-200 text-indigo-800 rounded-lg text-sm flex justify-between items-center">
+                <span>🗄️ Using server database — {contacts.length} contacts loaded from "{selectedSheet}"</span>
+                <button
+                  onClick={() => { setUsingServerCache(false); setContacts([]); setSelectedContacts(new Set()); }}
+                  className="text-xs px-2 py-1 bg-indigo-200 hover:bg-indigo-300 rounded"
+                >
+                  Switch to Sheet
+                </button>
+              </div>
+            )}
+
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Select Sheet
+                  Select Sheet (from Google)
                 </label>
                 <select
                   value={selectedSheet}
-                  onChange={(e) => setSelectedSheet(e.target.value)}
+                  onChange={(e) => { setSelectedSheet(e.target.value); setUsingServerCache(false); }}
                   disabled={sheetsLoading}
                   className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
                 >
@@ -1419,6 +1491,7 @@ export default function CampaignsPage() {
 
 
   return (
+    <>
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 p-4 sm:p-6">
       <div className="max-w-4xl mx-auto">
         <h1 className="text-3xl font-bold text-gray-900 mb-2">🚀 Campaign Manager</h1>
@@ -1663,6 +1736,6 @@ export default function CampaignsPage() {
           </div>
         </div>
       )}
-
+    </>
   );
 }

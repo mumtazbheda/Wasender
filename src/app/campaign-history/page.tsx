@@ -42,13 +42,16 @@ interface CampaignMessage {
 function CampaignHistoryContent() {
   const searchParams = useSearchParams();
   const detailId = searchParams.get("id");
-  
+
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedCampaign, setSelectedCampaign] = useState<Campaign | null>(null);
   const [messages, setMessages] = useState<CampaignMessage[]>([]);
   const [messagesLoading, setMessagesLoading] = useState(false);
   const [messageFilter, setMessageFilter] = useState<'all' | 'sent' | 'failed'>('all');
+  const [rerunModal, setRerunModal] = useState<Campaign | null>(null);
+  const [rerunLoading, setRerunLoading] = useState(false);
+  const [rerunStatus, setRerunStatus] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
 
   // Load all campaigns
   useEffect(() => {
@@ -117,11 +120,39 @@ function CampaignHistoryContent() {
   };
 
   const handleRerun = (campaign: Campaign) => {
-    const params = new URLSearchParams();
-    params.set('rerun', 'true');
-    if (campaign.sheet_tab) params.set('sheet', campaign.sheet_tab);
-    if (campaign.template_name) params.set('template', campaign.template_name);
-    window.location.href = `/campaigns?${params.toString()}`;
+    setRerunStatus(null);
+    setRerunModal(campaign);
+  };
+
+  const executeRerun = async (mode: 'resume' | 'fresh') => {
+    if (!rerunModal) return;
+    setRerunLoading(true);
+    setRerunStatus(null);
+    try {
+      const res = await fetch('/api/rerun-campaign', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ campaignId: rerunModal.id, mode }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setRerunStatus({ type: 'success', message: '✅ ' + data.message });
+        // Refresh campaigns list
+        const h = await fetch('/api/send-campaign');
+        const hd = await h.json();
+        if (hd.campaigns) setCampaigns(hd.campaigns);
+        // Also refresh detail if open
+        if (selectedCampaign && selectedCampaign.id === rerunModal.id) {
+          const updated = (hd.campaigns || []).find((c: Campaign) => c.id === rerunModal.id);
+          if (updated) setSelectedCampaign(updated);
+        }
+      } else {
+        setRerunStatus({ type: 'error', message: '❌ ' + (data.message || 'Failed') });
+      }
+    } catch (e: any) {
+      setRerunStatus({ type: 'error', message: '❌ Failed: ' + e.message });
+    }
+    setRerunLoading(false);
   };
 
   const filteredMessages = messages.filter(m => {
@@ -137,6 +168,7 @@ function CampaignHistoryContent() {
     const activeFilters = Object.entries(parsedFilters).filter(([, v]: [string, any]) => Array.isArray(v) && v.length > 0);
 
     return (
+      <>
       <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 p-4 sm:p-6">
         <div className="max-w-5xl mx-auto">
           <button
@@ -306,11 +338,45 @@ function CampaignHistoryContent() {
           </div>
         </div>
       </div>
+
+      {/* Rerun Campaign Modal (detail view) */}
+      {rerunModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4" onClick={() => !rerunLoading && setRerunModal(null)}>
+          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6" onClick={e => e.stopPropagation()}>
+            <h2 className="text-xl font-bold text-gray-900 mb-2">↺ Re-run Campaign</h2>
+            <p className="text-gray-600 mb-1"><b>"{rerunModal.name || 'Unnamed Campaign'}"</b></p>
+            <p className="text-sm text-gray-500 mb-6">
+              {rerunModal.sent_count || 0} sent, {rerunModal.failed_count || 0} failed out of {rerunModal.total_unique_phones || rerunModal.total_contacts} total.
+            </p>
+            {rerunStatus && (
+              <div className={`mb-4 p-3 rounded-lg text-sm font-medium ${rerunStatus.type === 'success' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
+                {rerunStatus.message}
+              </div>
+            )}
+            <div className="flex flex-col gap-3">
+              <button disabled={rerunLoading} onClick={() => executeRerun('resume')} className="w-full py-3 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-300 text-white rounded-xl font-bold text-left px-4 transition">
+                <div className="font-bold">▶ Resume from where I left off</div>
+                <div className="text-sm font-normal opacity-90">Skip already-sent numbers, only send to remaining ones</div>
+              </button>
+              <button disabled={rerunLoading} onClick={() => executeRerun('fresh')} className="w-full py-3 bg-orange-500 hover:bg-orange-600 disabled:bg-orange-300 text-white rounded-xl font-bold text-left px-4 transition">
+                <div className="font-bold">↺ Start completely fresh</div>
+                <div className="text-sm font-normal opacity-90">Reset everything and send all messages again from the beginning</div>
+              </button>
+              <button disabled={rerunLoading} onClick={() => setRerunModal(null)} className="w-full py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-xl font-semibold transition">
+                {rerunStatus ? 'Close' : 'Cancel'}
+              </button>
+            </div>
+            {rerunLoading && <p className="text-center text-sm text-gray-500 mt-3">Processing...</p>}
+          </div>
+        </div>
+      )}
+      </>
     );
   }
 
   // Campaign List View
   return (
+    <>
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 p-4 sm:p-6">
       <div className="max-w-5xl mx-auto">
         <div className="flex justify-between items-center mb-6">
@@ -397,6 +463,55 @@ function CampaignHistoryContent() {
         )}
       </div>
     </div>
+
+    {/* Rerun Campaign Modal */}
+    {rerunModal && (
+      <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4" onClick={() => !rerunLoading && setRerunModal(null)}>
+        <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6" onClick={e => e.stopPropagation()}>
+          <h2 className="text-xl font-bold text-gray-900 mb-2">↺ Re-run Campaign</h2>
+          <p className="text-gray-600 mb-1">
+            <b>"{rerunModal.name || 'Unnamed Campaign'}"</b>
+          </p>
+          <p className="text-sm text-gray-500 mb-6">
+            {rerunModal.sent_count || 0} sent, {rerunModal.failed_count || 0} failed out of {rerunModal.total_unique_phones || rerunModal.total_contacts} total.
+          </p>
+
+          {rerunStatus && (
+            <div className={`mb-4 p-3 rounded-lg text-sm font-medium ${rerunStatus.type === 'success' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
+              {rerunStatus.message}
+            </div>
+          )}
+
+          <div className="flex flex-col gap-3">
+            <button
+              disabled={rerunLoading}
+              onClick={() => executeRerun('resume')}
+              className="w-full py-3 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-300 text-white rounded-xl font-bold text-left px-4 transition"
+            >
+              <div className="font-bold">▶ Resume from where I left off</div>
+              <div className="text-sm font-normal opacity-90">Skip already-sent numbers, only send to remaining ones</div>
+            </button>
+            <button
+              disabled={rerunLoading}
+              onClick={() => executeRerun('fresh')}
+              className="w-full py-3 bg-orange-500 hover:bg-orange-600 disabled:bg-orange-300 text-white rounded-xl font-bold text-left px-4 transition"
+            >
+              <div className="font-bold">↺ Start completely fresh</div>
+              <div className="text-sm font-normal opacity-90">Reset everything and send all messages again from the beginning</div>
+            </button>
+            <button
+              disabled={rerunLoading}
+              onClick={() => setRerunModal(null)}
+              className="w-full py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-xl font-semibold transition"
+            >
+              {rerunStatus ? 'Close' : 'Cancel'}
+            </button>
+          </div>
+          {rerunLoading && <p className="text-center text-sm text-gray-500 mt-3">Processing...</p>}
+        </div>
+      </div>
+    )}
+    </>
   );
 }
 
