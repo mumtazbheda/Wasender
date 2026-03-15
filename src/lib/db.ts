@@ -110,6 +110,8 @@ export async function initializeDatabase() {
 
   // Add owner_num column if it doesn't exist
   await sql`ALTER TABLE campaign_messages ADD COLUMN IF NOT EXISTS owner_num INTEGER DEFAULT 1`;
+  // Add row_index for Google Sheets tracking
+  await sql`ALTER TABLE campaign_messages ADD COLUMN IF NOT EXISTS row_index INTEGER`;
 }
 
 export { sql };

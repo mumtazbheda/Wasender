@@ -149,6 +149,11 @@ export default function CampaignsPage() {
   const [scheduledTime, setScheduledTime] = useState('');
   const [campaignName, setCampaignName] = useState('');
 
+  // Browser-driven campaign processing (Vercel Hobby compatible)
+  const [processingCampaignId, setProcessingCampaignId] = useState<number | null>(null);
+  const [processingProgress, setProcessingProgress] = useState<{sent: number; failed: number; total: number; currentPhone?: string; currentUnit?: string} | null>(null);
+  const processingStopRef = { current: false };
+
   // Load sheets
   useEffect(() => {
     const loadSheets = async () => {
@@ -497,11 +502,13 @@ export default function CampaignsPage() {
       });
       const data = await res.json();
       if (res.ok) {
-        setSendStatus({ type: 'success', message: `✅ Campaign "${campaignName}" started! ${data.uniquePhones} unique messages queued (${data.duplicatesRemoved} duplicates removed). Campaign ID: ${data.campaignId}` });
+        setSendStatus({ type: 'success', message: `✅ Campaign "${campaignName}" started! ${data.uniquePhones} messages queued (${data.duplicatesRemoved} duplicates skipped). Sending now…` });
         // Refresh history
         const histRes = await fetch('/api/send-campaign');
         const histData = await histRes.json();
         if (histData.campaigns) setCampaignHistory(histData.campaigns);
+        // Start browser-driven sending loop
+        startCampaignProcessing(data.campaignId, data.uniquePhones);
       } else {
         setSendStatus({ type: 'error', message: '❌ Failed: ' + (data.message || 'Unknown error') });
       }
@@ -509,6 +516,64 @@ export default function CampaignsPage() {
       setSendStatus({ type: 'error', message: '❌ Error: ' + err.message });
     }
     setSending(false);
+  };
+
+  // Converts delay to milliseconds
+  const convertDelayToMs = (amount: number, unit: string): number => {
+    switch (unit) {
+      case 'seconds': return amount * 1000;
+      case 'minutes': return amount * 60 * 1000;
+      case 'hours': return amount * 60 * 60 * 1000;
+      default: return amount * 1000;
+    }
+  };
+
+  // Browser-driven campaign processor — works on Vercel Hobby plan (no cron needed)
+  const startCampaignProcessing = (campaignId: number, total: number) => {
+    setProcessingCampaignId(campaignId);
+    setProcessingProgress({ sent: 0, failed: 0, total });
+    processingStopRef.current = false;
+    runNextMessage(campaignId);
+  };
+
+  const runNextMessage = async (campaignId: number) => {
+    if (processingStopRef.current) return;
+    try {
+      const res = await fetch('/api/process-campaign', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ campaignId }),
+      });
+      const data = await res.json();
+
+      if (data.isComplete || data.error) {
+        setProcessingCampaignId(null);
+        setProcessingProgress(null);
+        // Refresh history
+        const histRes = await fetch('/api/send-campaign');
+        const histData = await histRes.json();
+        if (histData.campaigns) setCampaignHistory(histData.campaigns);
+        return;
+      }
+
+      setProcessingProgress({
+        sent: data.sentTotal || 0,
+        failed: data.failedTotal || 0,
+        total: (data.sentTotal || 0) + (data.failedTotal || 0) + (data.queuedRemaining || 0),
+        currentPhone: data.phone,
+        currentUnit: data.unitName,
+      });
+
+      // Calculate delay with ±20% randomization
+      const baseMs = convertDelayToMs(delayBetween, delayUnit);
+      const variance = randomizeDelay ? baseMs * 0.2 : 0;
+      const actualDelay = Math.max(Math.round(baseMs + (Math.random() - 0.5) * 2 * variance), 1000);
+
+      setTimeout(() => runNextMessage(campaignId), actualDelay);
+    } catch (err) {
+      // Retry after 10s on network error
+      setTimeout(() => runNextMessage(campaignId), 10000);
+    }
   };
 
   // Label-value pair component
@@ -1509,6 +1574,31 @@ export default function CampaignsPage() {
             </div>
           )}
 
+          {/* Processing Banner */}
+          {processingCampaignId && processingProgress && (
+            <div className="p-4 rounded-lg bg-blue-50 border border-blue-200">
+              <div className="flex justify-between items-center mb-2">
+                <p className="font-bold text-blue-900">⏳ Campaign Running — Keep this tab open</p>
+                <button
+                  onClick={() => { processingStopRef.current = true; setProcessingCampaignId(null); setProcessingProgress(null); }}
+                  className="text-xs text-red-600 hover:text-red-800 border border-red-300 px-2 py-1 rounded"
+                >⏹ Stop</button>
+              </div>
+              <div className="w-full bg-blue-200 rounded-full h-2.5 mb-2">
+                <div
+                  className="bg-blue-600 h-2.5 rounded-full transition-all duration-500"
+                  style={{ width: `${processingProgress.total > 0 ? Math.round(((processingProgress.sent + processingProgress.failed) / processingProgress.total) * 100) : 0}%` }}
+                />
+              </div>
+              <div className="flex flex-wrap gap-4 text-sm text-blue-800">
+                <span>✅ Sent: <b>{processingProgress.sent}</b></span>
+                <span>❌ Failed: <b>{processingProgress.failed}</b></span>
+                <span>📋 Remaining: <b>{processingProgress.total - processingProgress.sent - processingProgress.failed}</b></span>
+                {processingProgress.currentPhone && <span className="text-gray-600">📱 Last: <b>{processingProgress.currentUnit || processingProgress.currentPhone}</b></span>}
+              </div>
+            </div>
+          )}
+
           {/* Buttons */}
           <div className="flex gap-4">
             <button
@@ -1539,14 +1629,22 @@ export default function CampaignsPage() {
                       <p className="font-bold text-gray-900">{campaign.name || campaign.template_name}</p>
                       <p className="text-sm text-gray-500">{new Date(campaign.created_at).toLocaleString()}</p>
                     </div>
-                    <span className={`px-3 py-1 rounded-full text-xs font-bold ${
-                      campaign.status === 'completed' ? 'bg-green-100 text-green-800' :
-                      campaign.status === 'in_progress' ? 'bg-blue-100 text-blue-800' :
-                      campaign.status === 'failed' ? 'bg-red-100 text-red-800' :
-                      'bg-gray-100 text-gray-800'
-                    }`}>
-                      {campaign.status}
-                    </span>
+                    <div className="flex items-center gap-2">
+                      <span className={`px-3 py-1 rounded-full text-xs font-bold ${
+                        campaign.status === 'completed' ? 'bg-green-100 text-green-800' :
+                        campaign.status === 'in_progress' ? 'bg-blue-100 text-blue-800' :
+                        campaign.status === 'failed' ? 'bg-red-100 text-red-800' :
+                        'bg-gray-100 text-gray-800'
+                      }`}>
+                        {campaign.status}
+                      </span>
+                      {campaign.status === 'in_progress' && processingCampaignId !== campaign.id && (
+                        <button
+                          onClick={(e) => { e.stopPropagation(); startCampaignProcessing(campaign.id, campaign.total_unique_phones || campaign.total_contacts); }}
+                          className="px-2 py-1 bg-blue-600 text-white text-xs rounded hover:bg-blue-700 font-bold"
+                        >▶ Resume</button>
+                      )}
+                    </div>
                   </div>
                   <div className="flex gap-6 mt-2 text-sm">
                     <span>📧 Total: <b>{campaign.total_contacts}</b></span>
