@@ -150,9 +150,7 @@ export default function CampaignsPage() {
   const [campaignName, setCampaignName] = useState('');
 
   // Browser-driven campaign processing (Vercel Hobby compatible)
-  const [processingCampaignId, setProcessingCampaignId] = useState<number | null>(null);
-  const [processingProgress, setProcessingProgress] = useState<{sent: number; failed: number; total: number; currentPhone?: string; currentUnit?: string} | null>(null);
-  const processingStopRef = { current: false };
+  const [rerunModal, setRerunModal] = useState<{ campaign: any } | null>(null);
 
   // Load sheets
   useEffect(() => {
@@ -502,13 +500,12 @@ export default function CampaignsPage() {
       });
       const data = await res.json();
       if (res.ok) {
-        setSendStatus({ type: 'success', message: `✅ Campaign "${campaignName}" started! ${data.uniquePhones} messages queued (${data.duplicatesRemoved} duplicates skipped). Sending now…` });
+        setSendStatus({ type: 'success', message: `✅ Campaign "${campaignName}" started! ${data.uniquePhones} messages queued — running in the background. You can close this tab.` });
         // Refresh history
         const histRes = await fetch('/api/send-campaign');
         const histData = await histRes.json();
         if (histData.campaigns) setCampaignHistory(histData.campaigns);
         // Start browser-driven sending loop
-        startCampaignProcessing(data.campaignId, data.uniquePhones);
       } else {
         setSendStatus({ type: 'error', message: '❌ Failed: ' + (data.message || 'Unknown error') });
       }
@@ -527,55 +524,6 @@ export default function CampaignsPage() {
       default: return amount * 1000;
     }
   };
-
-  // Browser-driven campaign processor — works on Vercel Hobby plan (no cron needed)
-  const startCampaignProcessing = (campaignId: number, total: number) => {
-    setProcessingCampaignId(campaignId);
-    setProcessingProgress({ sent: 0, failed: 0, total });
-    processingStopRef.current = false;
-    runNextMessage(campaignId);
-  };
-
-  const runNextMessage = async (campaignId: number) => {
-    if (processingStopRef.current) return;
-    try {
-      const res = await fetch('/api/process-campaign', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ campaignId }),
-      });
-      const data = await res.json();
-
-      if (data.isComplete || data.error) {
-        setProcessingCampaignId(null);
-        setProcessingProgress(null);
-        // Refresh history
-        const histRes = await fetch('/api/send-campaign');
-        const histData = await histRes.json();
-        if (histData.campaigns) setCampaignHistory(histData.campaigns);
-        return;
-      }
-
-      setProcessingProgress({
-        sent: data.sentTotal || 0,
-        failed: data.failedTotal || 0,
-        total: (data.sentTotal || 0) + (data.failedTotal || 0) + (data.queuedRemaining || 0),
-        currentPhone: data.phone,
-        currentUnit: data.unitName,
-      });
-
-      // Calculate delay with ±20% randomization
-      const baseMs = convertDelayToMs(delayBetween, delayUnit);
-      const variance = randomizeDelay ? baseMs * 0.2 : 0;
-      const actualDelay = Math.max(Math.round(baseMs + (Math.random() - 0.5) * 2 * variance), 1000);
-
-      setTimeout(() => runNextMessage(campaignId), actualDelay);
-    } catch (err) {
-      // Retry after 10s on network error
-      setTimeout(() => runNextMessage(campaignId), 10000);
-    }
-  };
-
   // Label-value pair component
   const LabelValue = ({ label, value }: { label: string; value: React.ReactNode }) => (
     <div className="flex justify-between items-start gap-4 text-sm">
@@ -1454,6 +1402,22 @@ export default function CampaignsPage() {
     return totalPhones - dedupPhones.size;
   })();
 
+  // Poll for in_progress campaigns every 10 seconds
+  useEffect(() => {
+    const poll = async () => {
+      const hasPending = campaignHistory.some(c => c.status === 'in_progress');
+      if (!hasPending) return;
+      try {
+        const res = await fetch('/api/send-campaign');
+        const data = await res.json();
+        if (data.campaigns) setCampaignHistory(data.campaigns);
+      } catch {}
+    };
+    const interval = setInterval(poll, 10000);
+    return () => clearInterval(interval);
+  }, [campaignHistory]);
+
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 p-4 sm:p-6">
       <div className="max-w-4xl mx-auto">
@@ -1574,31 +1538,6 @@ export default function CampaignsPage() {
             </div>
           )}
 
-          {/* Processing Banner */}
-          {processingCampaignId && processingProgress && (
-            <div className="p-4 rounded-lg bg-blue-50 border border-blue-200">
-              <div className="flex justify-between items-center mb-2">
-                <p className="font-bold text-blue-900">⏳ Campaign Running — Keep this tab open</p>
-                <button
-                  onClick={() => { processingStopRef.current = true; setProcessingCampaignId(null); setProcessingProgress(null); }}
-                  className="text-xs text-red-600 hover:text-red-800 border border-red-300 px-2 py-1 rounded"
-                >⏹ Stop</button>
-              </div>
-              <div className="w-full bg-blue-200 rounded-full h-2.5 mb-2">
-                <div
-                  className="bg-blue-600 h-2.5 rounded-full transition-all duration-500"
-                  style={{ width: `${processingProgress.total > 0 ? Math.round(((processingProgress.sent + processingProgress.failed) / processingProgress.total) * 100) : 0}%` }}
-                />
-              </div>
-              <div className="flex flex-wrap gap-4 text-sm text-blue-800">
-                <span>✅ Sent: <b>{processingProgress.sent}</b></span>
-                <span>❌ Failed: <b>{processingProgress.failed}</b></span>
-                <span>📋 Remaining: <b>{processingProgress.total - processingProgress.sent - processingProgress.failed}</b></span>
-                {processingProgress.currentPhone && <span className="text-gray-600">📱 Last: <b>{processingProgress.currentUnit || processingProgress.currentPhone}</b></span>}
-              </div>
-            </div>
-          )}
-
           {/* Buttons */}
           <div className="flex gap-4">
             <button
@@ -1638,11 +1577,11 @@ export default function CampaignsPage() {
                       }`}>
                         {campaign.status}
                       </span>
-                      {campaign.status === 'in_progress' && processingCampaignId !== campaign.id && (
+                      {(campaign.status === 'in_progress' || campaign.status === 'completed' || campaign.status === 'partial' || campaign.status === 'failed') && (
                         <button
-                          onClick={(e) => { e.stopPropagation(); startCampaignProcessing(campaign.id, campaign.total_unique_phones || campaign.total_contacts); }}
-                          className="px-2 py-1 bg-blue-600 text-white text-xs rounded hover:bg-blue-700 font-bold"
-                        >▶ Resume</button>
+                          onClick={(e) => { e.stopPropagation(); setRerunModal({ campaign }); }}
+                          className={`px-2 py-1 text-white text-xs rounded font-bold ${campaign.status === 'in_progress' ? 'bg-blue-600 hover:bg-blue-700' : 'bg-gray-500 hover:bg-gray-600'}`}
+                        >{campaign.status === 'in_progress' ? '▶ Resume' : '↺ Re-run'}</button>
                       )}
                     </div>
                   </div>
@@ -1658,5 +1597,72 @@ export default function CampaignsPage() {
         )}
       </div>
     </div>
+      {/* Rerun Campaign Modal */}
+      {rerunModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4" onClick={() => setRerunModal(null)}>
+          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6" onClick={e => e.stopPropagation()}>
+            <h2 className="text-xl font-bold text-gray-900 mb-2">↺ Re-run Campaign</h2>
+            <p className="text-gray-600 mb-6">
+              <b>"{rerunModal.campaign.name}"</b><br/>
+              {rerunModal.campaign.sent_count || 0} sent, {rerunModal.campaign.failed_count || 0} failed out of {rerunModal.campaign.total_unique_phones || rerunModal.campaign.total_contacts} total.
+            </p>
+            <div className="flex flex-col gap-3">
+              <button
+                onClick={async () => {
+                  const id = rerunModal.campaign.id;
+                  setRerunModal(null);
+                  try {
+                    const res = await fetch('/api/rerun-campaign', {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ campaignId: id, mode: 'resume' }),
+                    });
+                    const data = await res.json();
+                    setSendStatus({ type: 'success', message: '✅ ' + data.message });
+                    const h = await fetch('/api/send-campaign');
+                    const hd = await h.json();
+                    if (hd.campaigns) setCampaignHistory(hd.campaigns);
+                  } catch (e: any) {
+                    setSendStatus({ type: 'error', message: '❌ Failed: ' + e.message });
+                  }
+                }}
+                className="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold text-left px-4"
+              >
+                <div className="font-bold">▶ Resume from where I left off</div>
+                <div className="text-sm font-normal opacity-90">Re-send only failed messages, skip already-sent ones</div>
+              </button>
+              <button
+                onClick={async () => {
+                  const id = rerunModal.campaign.id;
+                  setRerunModal(null);
+                  try {
+                    const res = await fetch('/api/rerun-campaign', {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ campaignId: id, mode: 'fresh' }),
+                    });
+                    const data = await res.json();
+                    setSendStatus({ type: 'success', message: '✅ ' + data.message });
+                    const h = await fetch('/api/send-campaign');
+                    const hd = await h.json();
+                    if (hd.campaigns) setCampaignHistory(hd.campaigns);
+                  } catch (e: any) {
+                    setSendStatus({ type: 'error', message: '❌ Failed: ' + e.message });
+                  }
+                }}
+                className="w-full py-3 bg-orange-500 hover:bg-orange-600 text-white rounded-xl font-bold text-left px-4"
+              >
+                <div className="font-bold">↺ Start completely fresh</div>
+                <div className="text-sm font-normal opacity-90">Reset everything and send all messages again from the beginning</div>
+              </button>
+              <button
+                onClick={() => setRerunModal(null)}
+                className="w-full py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-xl font-semibold"
+              >Cancel</button>
+            </div>
+          </div>
+        </div>
+      )}
+
   );
 }

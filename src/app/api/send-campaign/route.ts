@@ -43,6 +43,48 @@ function deduplicatePhones(contacts: any[]): { entries: PhoneEntry[]; totalPhone
   return { entries, totalPhones, duplicates: totalPhones - entries.length };
 }
 
+async function triggerGithubWorkflow(campaignId: number, delayMin: number, delayMax: number) {
+  const githubPat = process.env.GITHUB_PAT;
+  if (!githubPat) {
+    console.error('GITHUB_PAT not configured');
+    return false;
+  }
+
+  try {
+    const res = await fetch(
+      'https://api.github.com/repos/mumtazbheda/Wasender/actions/workflows/process-campaign.yml/dispatches',
+      {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${githubPat}`,
+          'Accept': 'application/vnd.github+json',
+          'Content-Type': 'application/json',
+          'X-GitHub-Api-Version': '2022-11-28',
+        },
+        body: JSON.stringify({
+          ref: 'main',
+          inputs: {
+            campaign_id: String(campaignId),
+            delay_min: String(delayMin),
+            delay_max: String(delayMax),
+          },
+        }),
+      }
+    );
+    if (res.ok || res.status === 204) {
+      console.log(`GitHub workflow dispatched for campaign ${campaignId}`);
+      return true;
+    } else {
+      const err = await res.text();
+      console.error('GitHub workflow dispatch failed:', err);
+      return false;
+    }
+  } catch (err: any) {
+    console.error('GitHub workflow dispatch error:', err.message);
+    return false;
+  }
+}
+
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
@@ -64,7 +106,14 @@ export async function POST(request: NextRequest) {
 
     const { entries: uniquePhones, totalPhones, duplicates } = deduplicatePhones(contacts);
 
-    // Create campaign record - status in_progress immediately
+    // Calculate delay in seconds
+    const rawDelay = parseInt(String(delayBetween || 5));
+    const unit = delayUnit || 'seconds';
+    const delaySeconds = unit === 'minutes' ? rawDelay * 60 : rawDelay;
+    const delayMin = randomizeDelay ? Math.max(5, Math.floor(delaySeconds * 0.5)) : delaySeconds;
+    const delayMax = randomizeDelay ? delaySeconds : delaySeconds;
+
+    // Create campaign record
     const campaignResult = await sql`
       INSERT INTO campaign_runs (name, account_id, account_name, template_name, template_body, sheet_tab, total_contacts, total_unique_phones, duplicates_removed, status, filters_used, delay_before, delay_between, delay_unit, randomize_delay, started_at)
       VALUES (${campaignName || 'Unnamed Campaign'}, ${parseInt(accountId)}, ${accountName || account.name || ''}, ${templateName || 'Unnamed'}, ${templateBody}, ${sheetTab || ''}, ${contacts.length}, ${uniquePhones.length}, ${duplicates}, 'in_progress', ${filtersUsed || ''}, ${delayBefore || 0}, ${delayBetween || 5}, ${delayUnit || 'seconds'}, ${randomizeDelay || false}, NOW())
@@ -72,7 +121,7 @@ export async function POST(request: NextRequest) {
     `;
     const campaignId = campaignResult.rows[0].id;
 
-    // Pre-queue ALL messages — browser will drive the sending with delays
+    // Pre-queue ALL messages
     for (let i = 0; i < uniquePhones.length; i++) {
       const entry = uniquePhones[i];
       const message = replaceVars(templateBody, entry.contact);
@@ -84,12 +133,18 @@ export async function POST(request: NextRequest) {
       `;
     }
 
+    // Trigger GitHub Actions workflow to process in background
+    const workflowTriggered = await triggerGithubWorkflow(campaignId, delayMin, delayMax);
+
     return NextResponse.json({
-      message: 'Campaign queued',
+      message: workflowTriggered
+        ? 'Campaign queued and background job started'
+        : 'Campaign queued (background job trigger failed - use Resume button)',
       campaignId,
       totalContacts: contacts.length,
       uniquePhones: uniquePhones.length,
       duplicatesRemoved: duplicates,
+      workflowTriggered,
     }, { status: 200 });
   } catch (error: any) {
     return NextResponse.json({ message: 'Failed: ' + error.message }, { status: 500 });
