@@ -112,6 +112,16 @@ export async function initializeDatabase() {
   await sql`ALTER TABLE campaign_messages ADD COLUMN IF NOT EXISTS owner_num INTEGER DEFAULT 1`;
   // Add row_index for Google Sheets tracking
   await sql`ALTER TABLE campaign_messages ADD COLUMN IF NOT EXISTS row_index INTEGER`;
+
+  // Full-data server-side contact cache (entire Google Sheet stored as JSON)
+  await sql`
+    CREATE TABLE IF NOT EXISTS sheets_data_cache (
+      sheet_name TEXT PRIMARY KEY,
+      contacts JSONB NOT NULL DEFAULT '[]',
+      contact_count INTEGER DEFAULT 0,
+      synced_at TIMESTAMP DEFAULT NOW()
+    )
+  `;
 }
 
 export { sql };

@@ -286,6 +286,12 @@ export default function ContactsPage() {
   const [cacheLoaded, setCacheLoaded] = useState(false);
   const [cacheTime, setCacheTime] = useState<string>("");
 
+  // Server-side DB cache state
+  const [savedSheets, setSavedSheets] = useState<{ sheet_name: string; contact_count: number; synced_at: string }[]>([]);
+  const [serverSyncLoading, setServerSyncLoading] = useState(false);
+  const [serverSyncMsg, setServerSyncMsg] = useState<string>("");
+  const [usingServerCache, setUsingServerCache] = useState(false);
+
   // Edit modal state
   const [editingContact, setEditingContact] = useState<Contact | null>(null);
   const [editFormData, setEditFormData] = useState<Record<string, string>>({});
@@ -361,6 +367,18 @@ export default function ContactsPage() {
       }
     };
     loadTemplates();
+  }, []);
+
+  // ─── Load list of server-saved sheets on mount ────────────────────────────
+  useEffect(() => {
+    const loadSavedSheets = async () => {
+      try {
+        const res = await fetch("/api/contacts-cache");
+        const data = await res.json();
+        if (data.success) setSavedSheets(data.sheets || []);
+      } catch {}
+    };
+    loadSavedSheets();
   }, []);
 
   // ─── Check localStorage cache when sheet is selected ───────────────────────
@@ -446,38 +464,64 @@ export default function ContactsPage() {
     }
   };
 
-  // ─── Sync to database ──────────────────────────────────────────────────────
-  const syncToDatabase = async () => {
-    if (!selectedSheet) {
-      setError("Please select a sheet");
-      return;
-    }
-
+  // ─── Load contacts from server-side DB cache ──────────────────────────────
+  const loadFromServerCache = async (sheetName: string) => {
     setLoading(true);
     setError("");
     try {
-      const res = await fetch("/api/sync-sheets", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ sheetName: selectedSheet }),
-      });
-
+      const res = await fetch(`/api/contacts-cache?sheet=${encodeURIComponent(sheetName)}`);
       const data = await res.json();
-      if (!res.ok) {
-        setError(data.error || "Failed to sync to database");
-      } else {
-        setError(
-          "✅ Successfully synced " + data.count + " contacts to database"
-        );
+      if (!res.ok || !data.success) {
+        setError(data.error || "Failed to load from server database");
+        return;
       }
+      setContacts(data.contacts || []);
+      setUsingServerCache(true);
+      setSelectedSheet(sheetName);
+      const syncDate = data.synced_at ? new Date(data.synced_at).toLocaleString() : "";
+      setServerSyncMsg(`📦 Loaded ${data.contact_count} contacts from server database (synced: ${syncDate})`);
+      setError("");
     } catch (err) {
-      setError(
-        "Error syncing: " +
-          (err instanceof Error ? err.message : "Unknown error")
-      );
-      console.error("Failed to sync:", err);
+      setError("Error loading from server: " + (err instanceof Error ? err.message : "Unknown error"));
     } finally {
       setLoading(false);
+    }
+  };
+
+  // ─── Sync ALL contact fields to server DB ─────────────────────────────────
+  const syncToDatabase = async () => {
+    if (contacts.length === 0) {
+      setError("No contacts loaded to sync. Please load contacts first.");
+      return;
+    }
+    if (!selectedSheet) {
+      setError("Please select a sheet first.");
+      return;
+    }
+
+    setServerSyncLoading(true);
+    setServerSyncMsg("");
+    setError("");
+    try {
+      const res = await fetch("/api/contacts-cache", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ sheetName: selectedSheet, contacts }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        setError(data.error || "Failed to sync to server database");
+      } else {
+        setServerSyncMsg(`✅ Saved ${data.count} contacts to server database for "${selectedSheet}"`);
+        // Refresh the saved sheets list
+        const listRes = await fetch("/api/contacts-cache");
+        const listData = await listRes.json();
+        if (listData.success) setSavedSheets(listData.sheets || []);
+      }
+    } catch (err) {
+      setError("Error syncing: " + (err instanceof Error ? err.message : "Unknown error"));
+    } finally {
+      setServerSyncLoading(false);
     }
   };
 
@@ -673,6 +717,26 @@ export default function ContactsPage() {
             `wasender_cache_${selectedSheet}_time`,
             Date.now().toString()
           );
+        } catch {}
+
+        // Also update server-side DB cache if it exists for this sheet
+        try {
+          const fieldUpdates: Record<string, any> = {};
+          for (const [field, value] of Object.entries(editFormData)) {
+            const original = String((editingContact as any)[field] ?? "");
+            if (value !== original) fieldUpdates[field] = value;
+          }
+          if (Object.keys(fieldUpdates).length > 0 && selectedSheet) {
+            await fetch("/api/contacts-cache", {
+              method: "PATCH",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                sheetName: selectedSheet,
+                rowIndex: editingContact.rowIndex,
+                updates: fieldUpdates,
+              }),
+            });
+          }
         } catch {}
 
         setEditSuccess("✅ Changes saved successfully!");
@@ -971,15 +1035,36 @@ export default function ContactsPage() {
 
         {/* ─── Controls Section ────────────────────────────────────────── */}
         <div className="bg-white rounded-lg shadow-md p-6 mb-6">
+          {/* View Saved Server Data */}
+          {savedSheets.length > 0 && (
+            <div className="mb-4 p-3 bg-indigo-50 border border-indigo-200 rounded-lg">
+              <p className="text-sm font-bold text-indigo-800 mb-2">📦 View Saved Data</p>
+              <div className="flex flex-wrap gap-2">
+                {savedSheets.map((s) => (
+                  <button
+                    key={s.sheet_name}
+                    onClick={() => loadFromServerCache(s.sheet_name)}
+                    disabled={loading}
+                    className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 disabled:bg-gray-400 text-white rounded-lg text-sm font-medium transition flex items-center gap-1"
+                  >
+                    <span>{s.sheet_name}</span>
+                    <span className="text-indigo-200 text-xs">({s.contact_count})</span>
+                  </button>
+                ))}
+              </div>
+              <p className="text-xs text-indigo-600 mt-1">Click to load contacts from server database (no Google login needed)</p>
+            </div>
+          )}
+
           {/* Sheet Selection */}
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
-                Select Sheet
+                Select Sheet (from Google)
               </label>
               <select
                 value={selectedSheet}
-                onChange={(e) => setSelectedSheet(e.target.value)}
+                onChange={(e) => { setSelectedSheet(e.target.value); setUsingServerCache(false); setServerSyncMsg(""); }}
                 disabled={sheetsLoading}
                 className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               >
@@ -1009,12 +1094,33 @@ export default function ContactsPage() {
 
             <button
               onClick={syncToDatabase}
-              disabled={loading || contacts.length === 0}
+              disabled={serverSyncLoading || contacts.length === 0}
               className="self-end px-4 py-2 bg-purple-600 hover:bg-purple-700 disabled:bg-gray-400 text-white rounded-lg transition"
+              title="Save all loaded contacts to server database so they can be accessed without Google login"
             >
-              {loading ? "Syncing..." : "Sync to Database"}
+              {serverSyncLoading ? "Saving..." : "💾 Save to Server DB"}
             </button>
           </div>
+
+          {/* Server sync message */}
+          {serverSyncMsg && (
+            <div className="mb-3 p-3 bg-purple-50 border border-purple-200 text-purple-800 rounded-lg text-sm">
+              {serverSyncMsg}
+            </div>
+          )}
+
+          {/* Server cache indicator */}
+          {usingServerCache && (
+            <div className="mb-3 p-3 bg-indigo-50 border border-indigo-200 text-indigo-800 rounded-lg text-sm flex justify-between items-center">
+              <span>🗄️ Using server database — {contacts.length} contacts loaded</span>
+              <button
+                onClick={() => { setUsingServerCache(false); setServerSyncMsg(""); setContacts([]); }}
+                className="text-xs px-2 py-1 bg-indigo-200 hover:bg-indigo-300 rounded"
+              >
+                Switch to Sheet
+              </button>
+            </div>
+          )}
 
           {/* Cache indicator */}
           {cacheLoaded && (
