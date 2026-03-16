@@ -44,6 +44,15 @@ function isYes(val: string): boolean {
   return (val || "").toString().trim().toLowerCase() === "yes";
 }
 
+function uniqueValues(contacts: Contact[], field: string): string[] {
+  const seen = new Set<string>();
+  for (const c of contacts) {
+    const val = (c[field] || "").toString().trim();
+    if (val) seen.add(val);
+  }
+  return Array.from(seen).slice(0, 10);
+}
+
 function computeStats(contacts: Contact[]): Stats {
   let listedForSale = 0;
   let listedForRent = 0;
@@ -326,6 +335,32 @@ export default function StatisticsPage() {
                 <ProgressBar label="Not Rented" value={stats.contractNotRented} total={stats.totalUnits} color="bg-gray-400" />
               </div>
             </div>
+
+            {/* ── Debug: show actual stored values ─────────────────── */}
+            <details className="bg-yellow-50 border border-yellow-300 rounded-xl p-4 mb-6 text-xs">
+              <summary className="font-bold text-yellow-800 cursor-pointer">🔍 Debug — actual values in DB (click to expand)</summary>
+              <div className="mt-3 space-y-2">
+                {[
+                  { label: "bayut_sale", field: "bayut_sale" },
+                  { label: "bayut_rent", field: "bayut_rent" },
+                  { label: "pf_sale", field: "pf_sale" },
+                  { label: "pf_rent", field: "pf_rent" },
+                  { label: "rental_contract_status", field: "rental_contract_status" },
+                  { label: "listing_status (sample)", field: "listing_status" },
+                ].map(({ label, field }) => {
+                  const vals = uniqueValues(contacts, field);
+                  return (
+                    <div key={field}>
+                      <span className="font-semibold text-gray-700">{label}: </span>
+                      {vals.length === 0
+                        ? <span className="text-red-500 italic">empty / not found in DB</span>
+                        : <span className="text-gray-600">{vals.map(v => `"${v}"`).join(", ")}</span>
+                      }
+                    </div>
+                  );
+                })}
+              </div>
+            </details>
 
             {/* ── Summary Footer ───────────────────────────────────── */}
             <div className="bg-blue-600 rounded-xl p-5 text-white">
