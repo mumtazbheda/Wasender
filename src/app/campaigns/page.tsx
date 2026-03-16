@@ -249,6 +249,21 @@ export default function CampaignsPage() {
     loadSavedSheets();
   }, []);
 
+  // Poll for in_progress campaigns every 10 seconds
+  useEffect(() => {
+    const poll = async () => {
+      const hasPending = campaignHistory.some(c => c.status === 'in_progress');
+      if (!hasPending) return;
+      try {
+        const res = await fetch('/api/send-campaign');
+        const data = await res.json();
+        if (data.campaigns) setCampaignHistory(data.campaigns);
+      } catch {}
+    };
+    const interval = setInterval(poll, 10000);
+    return () => clearInterval(interval);
+  }, [campaignHistory]);
+
   // Load contacts from sheet
   const loadContacts = async () => {
     if (!selectedSheet) {
@@ -1335,22 +1350,6 @@ export default function CampaignsPage() {
     }
     return totalPhones - dedupPhones.size;
   })();
-
-  // Poll for in_progress campaigns every 10 seconds
-  useEffect(() => {
-    const poll = async () => {
-      const hasPending = campaignHistory.some(c => c.status === 'in_progress');
-      if (!hasPending) return;
-      try {
-        const res = await fetch('/api/send-campaign');
-        const data = await res.json();
-        if (data.campaigns) setCampaignHistory(data.campaigns);
-      } catch {}
-    };
-    const interval = setInterval(poll, 10000);
-    return () => clearInterval(interval);
-  }, [campaignHistory]);
-
 
   return (
     <>
