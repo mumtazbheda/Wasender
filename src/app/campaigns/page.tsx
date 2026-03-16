@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { signIn, useSession } from "next-auth/react";
+import MultiSelectDropdown from "@/components/MultiSelectDropdown";
 
 interface Contact {
   rowIndex: number;
@@ -743,205 +744,66 @@ export default function CampaignsPage() {
 
               {/* Filters Grid */}
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Purpose</label>
-                  <select
-                    multiple
-                    value={filters.purpose}
-                    onChange={(e) =>
-                      setFilters({
-                        ...filters,
-                        purpose: Array.from(e.target.selectedOptions, (opt) => opt.value),
-                      })
-                    }
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                    size={3}
-                  >
-                    {getUniqueValues("purpose").map((val) => (
-                      <option key={val} value={val}>{val}</option>
-                    ))}
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Rooms</label>
-                  <select
-                    multiple
-                    value={filters.rooms}
-                    onChange={(e) =>
-                      setFilters({
-                        ...filters,
-                        rooms: Array.from(e.target.selectedOptions, (opt) => opt.value),
-                      })
-                    }
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                    size={3}
-                  >
-                    {getUniqueValues("rooms_en").map((val) => (
-                      <option key={val} value={val}>{val}</option>
-                    ))}
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Listing Status</label>
-                  <select
-                    multiple
-                    value={filters.listing_status}
-                    onChange={(e) =>
-                      setFilters({
-                        ...filters,
-                        listing_status: Array.from(e.target.selectedOptions, (opt) => opt.value),
-                      })
-                    }
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                    size={3}
-                  >
-                    {getUniqueValues("listing_status").map((val) => (
-                      <option key={val} value={val}>{val}</option>
-                    ))}
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Rental Status</label>
-                  <select
-                    multiple
-                    value={filters.rental_contract_status}
-                    onChange={(e) =>
-                      setFilters({
-                        ...filters,
-                        rental_contract_status: Array.from(e.target.selectedOptions, (opt) => opt.value),
-                      })
-                    }
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                    size={3}
-                  >
-                    {getUniqueValues("rental_contract_status").map((val) => (
-                      <option key={val} value={val}>{val}</option>
-                    ))}
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Ahmed Feedback 1</label>
-                  <select
-                    multiple
-                    value={filters.ahmed_feedback_1}
-                    onChange={(e) =>
-                      setFilters({
-                        ...filters,
-                        ahmed_feedback_1: Array.from(e.target.selectedOptions, (opt) => opt.value),
-                      })
-                    }
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                    size={3}
-                  >
-                    {getUniqueValues("ahmed_feedback_1").map((val) => (
-                      <option key={val} value={val}>{val}</option>
-                    ))}
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Ahmed Feedback 2</label>
-                  <select
-                    multiple
-                    value={filters.ahmed_feedback_2}
-                    onChange={(e) =>
-                      setFilters({
-                        ...filters,
-                        ahmed_feedback_2: Array.from(e.target.selectedOptions, (opt) => opt.value),
-                      })
-                    }
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                    size={3}
-                  >
-                    {getUniqueValues("ahmed_feedback_2").map((val) => (
-                      <option key={val} value={val}>{val}</option>
-                    ))}
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Ahmed Feedback 3</label>
-                  <select
-                    multiple
-                    value={filters.ahmed_feedback_3}
-                    onChange={(e) =>
-                      setFilters({
-                        ...filters,
-                        ahmed_feedback_3: Array.from(e.target.selectedOptions, (opt) => opt.value),
-                      })
-                    }
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                    size={3}
-                  >
-                    {getUniqueValues("ahmed_feedback_3").map((val) => (
-                      <option key={val} value={val}>{val}</option>
-                    ))}
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Zoha Feedback 1</label>
-                  <select
-                    multiple
-                    value={filters.zoha_feedback_1}
-                    onChange={(e) =>
-                      setFilters({
-                        ...filters,
-                        zoha_feedback_1: Array.from(e.target.selectedOptions, (opt) => opt.value),
-                      })
-                    }
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                    size={3}
-                  >
-                    {getUniqueValues("zoha_feedback_1").map((val) => (
-                      <option key={val} value={val}>{val}</option>
-                    ))}
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Zoha Feedback 2</label>
-                  <select
-                    multiple
-                    value={filters.zoha_feedback_2}
-                    onChange={(e) =>
-                      setFilters({
-                        ...filters,
-                        zoha_feedback_2: Array.from(e.target.selectedOptions, (opt) => opt.value),
-                      })
-                    }
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                    size={3}
-                  >
-                    {getUniqueValues("zoha_feedback_2").map((val) => (
-                      <option key={val} value={val}>{val}</option>
-                    ))}
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Zoha Feedback 3</label>
-                  <select
-                    multiple
-                    value={filters.zoha_feedback_3}
-                    onChange={(e) =>
-                      setFilters({
-                        ...filters,
-                        zoha_feedback_3: Array.from(e.target.selectedOptions, (opt) => opt.value),
-                      })
-                    }
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                    size={3}
-                  >
-                    {getUniqueValues("zoha_feedback_3").map((val) => (
-                      <option key={val} value={val}>{val}</option>
-                    ))}
-                  </select>
-                </div>
+                <MultiSelectDropdown
+                  label="Purpose"
+                  options={getUniqueValues("purpose")}
+                  selected={filters.purpose}
+                  onChange={(vals) => setFilters({ ...filters, purpose: vals })}
+                />
+                <MultiSelectDropdown
+                  label="Rooms"
+                  options={getUniqueValues("rooms_en")}
+                  selected={filters.rooms}
+                  onChange={(vals) => setFilters({ ...filters, rooms: vals })}
+                />
+                <MultiSelectDropdown
+                  label="Listing Status"
+                  options={getUniqueValues("listing_status")}
+                  selected={filters.listing_status}
+                  onChange={(vals) => setFilters({ ...filters, listing_status: vals })}
+                />
+                <MultiSelectDropdown
+                  label="Rental Status"
+                  options={getUniqueValues("rental_contract_status")}
+                  selected={filters.rental_contract_status}
+                  onChange={(vals) => setFilters({ ...filters, rental_contract_status: vals })}
+                />
+                <MultiSelectDropdown
+                  label="Ahmed Feedback 1"
+                  options={getUniqueValues("ahmed_feedback_1")}
+                  selected={filters.ahmed_feedback_1}
+                  onChange={(vals) => setFilters({ ...filters, ahmed_feedback_1: vals })}
+                />
+                <MultiSelectDropdown
+                  label="Ahmed Feedback 2"
+                  options={getUniqueValues("ahmed_feedback_2")}
+                  selected={filters.ahmed_feedback_2}
+                  onChange={(vals) => setFilters({ ...filters, ahmed_feedback_2: vals })}
+                />
+                <MultiSelectDropdown
+                  label="Ahmed Feedback 3"
+                  options={getUniqueValues("ahmed_feedback_3")}
+                  selected={filters.ahmed_feedback_3}
+                  onChange={(vals) => setFilters({ ...filters, ahmed_feedback_3: vals })}
+                />
+                <MultiSelectDropdown
+                  label="Zoha Feedback 1"
+                  options={getUniqueValues("zoha_feedback_1")}
+                  selected={filters.zoha_feedback_1}
+                  onChange={(vals) => setFilters({ ...filters, zoha_feedback_1: vals })}
+                />
+                <MultiSelectDropdown
+                  label="Zoha Feedback 2"
+                  options={getUniqueValues("zoha_feedback_2")}
+                  selected={filters.zoha_feedback_2}
+                  onChange={(vals) => setFilters({ ...filters, zoha_feedback_2: vals })}
+                />
+                <MultiSelectDropdown
+                  label="Zoha Feedback 3"
+                  options={getUniqueValues("zoha_feedback_3")}
+                  selected={filters.zoha_feedback_3}
+                  onChange={(vals) => setFilters({ ...filters, zoha_feedback_3: vals })}
+                />
               </div>
 
               {/* Owner Mobile Filters */}
