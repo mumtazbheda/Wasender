@@ -1,0 +1,64 @@
+name: Process Campaign
+
+on:
+  workflow_dispatch:
+    inputs:
+      campaign_id:
+        description: 'Campaign ID to process'
+        required: true
+        type: string
+      delay_min:
+        description: 'Minimum delay between messages (seconds)'
+        required: true
+        type: string
+      delay_max:
+        description: 'Maximum delay between messages (seconds)'
+        required: true
+        type: string
+
+jobs:
+  process:
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+
+    steps:
+      - name: Process campaign messages
+        run: |
+          CAMPAIGN_ID="${{ inputs.campaign_id }}"
+          DELAY_MIN="${{ inputs.delay_min }}"
+          DELAY_MAX="${{ inputs.delay_max }}"
+          BASE_URL="https://wasender-pi.vercel.app"
+
+          echo "Starting campaign $CAMPAIGN_ID (delay: ${DELAY_MIN}s - ${DELAY_MAX}s)"
+
+          while true; do
+            RESPONSE=$(curl -s -X POST \
+              -H "Content-Type: application/json" \
+              -d "{\"campaignId\": $CAMPAIGN_ID}" \
+              "$BASE_URL/api/process-campaign")
+
+            echo "Response: $RESPONSE"
+
+            IS_COMPLETE=$(echo "$RESPONSE" | python3 -c "import sys, json; d=json.load(sys.stdin); print(str(d.get('isComplete', False)).lower())" 2>/dev/null || echo "false")
+            SUCCESS=$(echo "$RESPONSE" | python3 -c "import sys, json; d=json.load(sys.stdin); print(str(d.get('success', False)).lower())" 2>/dev/null || echo "false")
+            SENT=$(echo "$RESPONSE" | python3 -c "import sys, json; d=json.load(sys.stdin); print(d.get('sentTotal', 0))" 2>/dev/null || echo "0")
+            FAILED=$(echo "$RESPONSE" | python3 -c "import sys, json; d=json.load(sys.stdin); print(d.get('failedTotal', 0))" 2>/dev/null || echo "0")
+            QUEUED=$(echo "$RESPONSE" | python3 -c "import sys, json; d=json.load(sys.stdin); print(d.get('queuedRemaining', 0))" 2>/dev/null || echo "0")
+
+            echo "Status: sent=$SENT failed=$FAILED queued=$QUEUED complete=$IS_COMPLETE"
+
+            if [ "$IS_COMPLETE" = "true" ]; then
+              echo "Campaign $CAMPAIGN_ID complete! Sent: $SENT, Failed: $FAILED"
+              break
+            fi
+
+            if [ "$DELAY_MAX" -le "$DELAY_MIN" ]; then
+              SLEEP_TIME=$DELAY_MIN
+            else
+              RANGE=$(( DELAY_MAX - DELAY_MIN + 1 ))
+              SLEEP_TIME=$(( DELAY_MIN + RANDOM % RANGE ))
+            fi
+
+            echo "Sleeping ${SLEEP_TIME}s before next message..."
+            sleep $SLEEP_TIME
+          done

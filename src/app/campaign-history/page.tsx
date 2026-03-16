@@ -48,7 +48,7 @@ function CampaignHistoryContent() {
   const [selectedCampaign, setSelectedCampaign] = useState<Campaign | null>(null);
   const [messages, setMessages] = useState<CampaignMessage[]>([]);
   const [messagesLoading, setMessagesLoading] = useState(false);
-  const [messageFilter, setMessageFilter] = useState<'all' | 'sent' | 'failed'>('all');
+  const [messageFilter, setMessageFilter] = useState<'all' | 'sent' | 'failed' | 'queued'>('all');
   const [rerunModal, setRerunModal] = useState<Campaign | null>(null);
   const [rerunLoading, setRerunLoading] = useState(false);
   const [rerunStatus, setRerunStatus] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
@@ -296,6 +296,14 @@ function CampaignHistoryContent() {
                 >
                   ❌ Failed ({messages.filter(m => m.status === 'failed').length})
                 </button>
+                {messages.filter(m => m.status === 'queued').length > 0 && (
+                  <button
+                    onClick={() => setMessageFilter('queued')}
+                    className={`px-3 py-1 rounded-full text-xs font-bold transition ${messageFilter === 'queued' ? 'bg-yellow-600 text-white' : 'bg-gray-200 text-gray-700'}`}
+                  >
+                    ⏳ Queued ({messages.filter(m => m.status === 'queued').length})
+                  </button>
+                )}
               </div>
             </div>
 
@@ -309,11 +317,11 @@ function CampaignHistoryContent() {
               <div className="space-y-2 max-h-[600px] overflow-y-auto">
                 {filteredMessages.map((msg) => (
                   <div key={msg.id} className={`border rounded-lg p-3 text-sm ${
-                    msg.status === 'sent' ? 'border-green-200 bg-green-50' : 'border-red-200 bg-red-50'
+                    msg.status === 'sent' ? 'border-green-200 bg-green-50' : msg.status === 'queued' ? 'border-gray-200 bg-gray-50' : 'border-red-200 bg-red-50'
                   }`}>
                     <div className="flex flex-col sm:flex-row justify-between gap-2">
                       <div className="flex items-center gap-3">
-                        <span className="text-lg">{msg.status === 'sent' ? '✅' : '❌'}</span>
+                        <span className="text-lg">{msg.status === 'sent' ? '✅' : msg.status === 'queued' ? '⏳' : '❌'}</span>
                         <div>
                           <p className="font-bold text-gray-900">
                             {msg.unit_name && <span className="text-blue-600">{msg.unit_name}</span>}
