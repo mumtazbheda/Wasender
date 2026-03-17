@@ -1,31 +1,35 @@
 # WASENDER MASTER MEMORY & CHANGELOG
 
-**LAST UPDATED:** 15 Mar 2026, 20:56 GMT+4
-**PROJECT STATUS:** Background campaign job deployed — awaiting GitHub PAT with `workflow` scope
-**LATEST LIVE COMMIT:** `040ce77` — Campaign background job via GitHub Actions + rerun dialog
+**LAST UPDATED:** 17 Mar 2026, GMT+4
+**PROJECT STATUS:** GitHub Actions workflow created + campaign UI crash fixed + queued status display fixed
+**LATEST LIVE COMMIT:** `2bc9a32` — GitHub Actions workflow + queued UI fix
+**BRANCH:** `claude/review-memory-lock-docs-GGh8m` (pending merge to main)
 **LIVE URL:** https://wasender-pi.vercel.app
 **REPOSITORY:** https://github.com/mumtazbheda/Wasender
 
 ---
 
-## ⚡ QUICK STATUS (As of 15 Mar 2026)
+## ⚡ QUICK STATUS (As of 17 Mar 2026)
 
 | Feature | Status |
 |---|---|
 | Campaign rerun dialog (Fresh start / Resume) | ✅ Live |
 | "Keep tab open" banner | ✅ Removed |
-| Background campaign via GitHub Actions | ⏳ Needs new PAT (see below) |
+| Background campaign via GitHub Actions | ✅ Workflow file created (needs PAT + merge) |
+| `.github/workflows/process-campaign.yml` | ✅ Created in branch |
+| Campaign Step 4 "Review & Send" crash | ✅ Fixed (Rules of Hooks violation) |
+| Queued messages showing as ❌ red | ✅ Fixed — now shows ⏳ gray |
+| Queued filter tab in Campaign History | ✅ Added |
 | Contract A showing correct value | ✅ Fixed (commit 7acbc5f) |
 | WhatsApp 3-step modal (Owner → Account → Template) | ✅ Fixed (PR #2) |
 | Send Message phone validation | ✅ Fixed (commit 7acbc5f) |
+| Statistics page (`/statistics`) | ✅ Live |
+| Collapsible sidebar | ✅ Live |
+| MultiSelectDropdown for Campaigns + Contacts | ✅ Live |
 
-### 🔴 ONE PENDING ACTION
-To enable fully background campaigns (no tab required), the user must create a **GitHub Personal Access Token** with `repo` + `workflow` scopes and share it. This allows the agent to write `.github/workflows/process-campaign.yml` to the repo.
-
-**Steps:**
-1. github.com → Settings → Developer Settings → Personal access tokens → Tokens (classic)
-2. Generate new token (classic), check: `repo` (all) + `workflow`
-3. Share with agent — agent will add workflow file + update Vercel env var
+### 🔴 PENDING ACTIONS
+1. **Merge PR** from branch `claude/review-memory-lock-docs-GGh8m` → `main` to deploy fixes
+2. **Add `GITHUB_PAT` secret** to GitHub repo (Settings → Secrets → Actions → New secret) with a Personal Access Token that has `workflow` scope — this allows the GitHub Actions workflow to be triggered when a campaign is started
 
 ---
 
@@ -43,6 +47,9 @@ To enable fully background campaigns (no tab required), the user must create a *
 10. **Vercel serverless functions are killed after HTTP response** → Background loops/setTimeout don't work; must use external scheduler (GitHub Actions, cron service)
 11. **Wrong API endpoint → HTML error page** → Trying to JSON.parse HTML in Safari throws "string did not match expected pattern"
 12. **iOS input validation** → Use `type="text"` not `type="tel"` to avoid strict iOS phone validation
+13. **React Rules of Hooks** → NO `useEffect`/`useState` after `if (...) { return }` — all hooks must be before ANY early return or the app crashes when the condition flips
+14. **`queued` ≠ `failed` in UI** → Show ⏳ gray for queued, ❌ red for failed only — otherwise users think campaign failed when messages are just pending
+15. **GitHub Actions workflow must exist in repo** → Dispatching a workflow that doesn't exist does nothing; campaign messages stay queued forever
 
 ---
 
@@ -84,18 +91,23 @@ To enable fully background campaigns (no tab required), the user must create a *
 
 ### Campaign Background Processing (GitHub Actions approach)
 ```
-Flow when GitHub PAT with workflow scope is available:
+Flow (workflow file now exists at .github/workflows/process-campaign.yml):
 1. User clicks "Send Campaign" → /api/send-campaign queues all messages in DB
 2. API calls GitHub Actions via REST API: POST /repos/.../actions/workflows/process-campaign.yml/dispatches
-3. GitHub Actions workflow polls /api/process-campaign every N seconds
-4. Each poll: sends one message, updates DB status
-5. Loop continues until all messages sent or workflow timeout (6h)
-6. User can CLOSE BROWSER — campaign runs completely server-side
+3. GitHub Actions workflow loops, calling /api/process-campaign with campaign_id
+4. Each call: sends one message, updates DB status (queued → sent/failed)
+5. Sleeps delay_min–delay_max seconds between messages (random range)
+6. Loop continues until isComplete=true or workflow timeout (6h max)
+7. User can CLOSE BROWSER — campaign runs completely server-side
 
-Fallback (current state without workflow PAT):
-- Messages are queued in DB
+Fallback (if GITHUB_PAT env var missing or wrong scope):
+- Messages stay in DB as "queued" (shown as ⏳ in UI)
 - User sees "use Resume button" message
-- (Improvement needed once PAT provided)
+- Click Resume → re-triggers the GitHub Actions workflow
+
+GitHub Actions workflow: .github/workflows/process-campaign.yml
+Vercel env var required: GITHUB_PAT (token needs `workflow` scope)
+GitHub repo secret required: none (workflow calls Vercel's public API endpoint)
 ```
 
 ### Data Flow
@@ -223,6 +235,9 @@ Campaign send → /api/send-campaign → queues in DB → triggers GitHub Action
 16. **Vercel serverless = no background loops** — Any async after response return is killed; use GitHub Actions for long-running jobs
 17. **Wrong API endpoint = HTML error in Safari** — 404 returns HTML, Safari's JSON.parse throws "string did not match expected pattern"
 18. **`type="tel"` causes iOS validation issues** — Always use `type="text"` for phone inputs
+19. **React Rules of Hooks: NO hooks after conditional early returns** — Any `useEffect` or `useState` placed AFTER an `if (step === X) { return (...) }` block will crash when the condition flips because React calls a different number of hooks per render. ALL hooks must live at the TOP of the component before any conditional returns
+20. **Queued messages ≠ failed messages in UI** — `status = 'queued'` should display as ⏳ gray pending; `status = 'failed'` should display as ❌ red. Treating both as red misleads users into thinking all messages failed when they are actually just waiting
+21. **GitHub Actions workflow file must exist before calling dispatch API** — Without `.github/workflows/process-campaign.yml` committed to the repo, calling the GitHub REST API to dispatch the workflow silently does nothing (or returns 404). Campaigns get queued in DB but are never processed. The file must be committed to the target ref (`main`) before the dispatch call
 
 ---
 
@@ -284,6 +299,59 @@ Campaign send → /api/send-campaign → queues in DB → triggers GitHub Action
 ---
 
 ## 📝 FULL CHANGELOG (Chronological)
+
+---
+
+### Session 7: Campaign Crash Fix + GitHub Actions Workflow + Queued UI Fix (17 Mar 2026)
+
+#### Problem 1: "Review & Send" button crashes entire app (client-side exception)
+**Symptom:** Clicking "Next: Review & Send" in Step 3 of campaigns caused a full white-screen crash:
+> "Application error: a client-side exception has occurred while loading wasender-pi.vercel.app"
+
+**Root cause:** React Rules of Hooks violation.
+- A `useEffect` for polling in-progress campaigns every 10 seconds was placed AFTER the `if (step === 1)`, `if (step === 2)`, `if (step === 3)` early returns
+- When step changes from 1/2/3 → 4, React tries to call a hook that wasn't called in the previous render
+- This is an illegal change in hook call order → React throws a fatal error
+
+**Fix:** Commit `8bfb921`
+- **File:** `src/app/campaigns/page.tsx`
+- Moved the polling `useEffect` to the top section of the component alongside the other `useEffect`s (after line ~250, before any conditional returns)
+- Removed the duplicate copy from the bottom of the file
+
+---
+
+#### Problem 2: All campaign messages failing — 143 messages, 0 sent, 0 failed (all stuck as queued)
+**Symptom:** After starting a campaign, the campaign history showed 143 messages all with red ❌, 0 sent, 0 failed. Campaign status was "In Progress" indefinitely.
+
+**Root causes (two separate issues):**
+
+**Root Cause A — GitHub Actions workflow file missing:**
+- `/api/send-campaign` calls `triggerGithubWorkflow()` which dispatches `.github/workflows/process-campaign.yml`
+- That workflow file **did not exist** in the repository (`.github/` directory was absent entirely)
+- Result: dispatch call silently failed → no background job → messages sat as "queued" forever
+
+**Root Cause B — UI bug: queued shown as failed:**
+- Campaign history page: `msg.status === 'sent' ? '✅' : '❌'`
+- Any non-"sent" status (including "queued") displayed as red ❌
+- This made it look like all 143 messages failed, when they were actually just waiting
+
+**Fix A:** Commit `2bc9a32` — Created `.github/workflows/process-campaign.yml`
+- Workflow accepts inputs: `campaign_id`, `delay_min`, `delay_max`
+- Loops calling `POST https://wasender-pi.vercel.app/api/process-campaign` with campaign_id
+- Sleeps random seconds between `delay_min` and `delay_max` after each message
+- Exits loop when `isComplete: true` returned from API
+- Max timeout: 6 hours (handles campaigns up to ~216 messages at 100s delay)
+
+**Fix B:** Commit `2bc9a32` — Fixed campaign history message display
+- **File:** `src/app/campaign-history/page.tsx`
+- Changed message row color: `sent` → green, `queued` → gray, `failed` → red
+- Changed message icon: `sent` → ✅, `queued` → ⏳, `failed` → ❌
+- Added "⏳ Queued (N)" filter tab (only appears when there are queued messages)
+- Updated `messageFilter` type from `'all' | 'sent' | 'failed'` to `'all' | 'sent' | 'failed' | 'queued'`
+
+**Remaining action required:**
+- Merge PR from `claude/review-memory-lock-docs-GGh8m` → `main` to deploy workflow file
+- Add `GITHUB_PAT` as a GitHub repo secret (Settings → Secrets → Actions) with `workflow` scope — needed so Vercel can trigger the workflow when campaigns start
 
 ---
 
@@ -442,12 +510,13 @@ User rejected commit `ca57ec6` (browser-driven campaign queue) for two reasons:
 
 ## ⏭️ FUTURE WORK (Not yet implemented)
 
-1. **GitHub Actions workflow file** — Pending new PAT with `workflow` scope. File ready at `/agent/home/process-campaign-workflow.yml`
+1. **Merge branch + add GITHUB_PAT secret** — Branch `claude/review-memory-lock-docs-GGh8m` must be merged to `main`, then add `GITHUB_PAT` as a GitHub repo secret with `workflow` scope so campaigns can be triggered
 2. **UAE Number Auto-Normalization to Google Sheet** — `isUAEPhone()` detects UAE numbers but doesn't yet write normalized numbers back to Sheet
 3. **Edit modal section reorganization** — View modal has 9 sections; edit modal (`EDIT_FIELD_GROUPS`) still has original grouping. Should be aligned
 4. **Campaign scheduling (cron)** — Date/time picker exists in Step 3 but actual scheduled execution not implemented server-side
 5. **Multi-user data isolation** — Multiple users can currently see each other's data. Needs `user_id` on all DB tables + per-user filtering
 6. **Full 162+ column edit support** — Edit modal may not show all 162 Google Sheet columns
+7. **Error message surfacing** — When a campaign message fails, the `error_message` column in `campaign_messages` stores the raw API error. Currently only visible when drilling into campaign detail. Could surface common errors (invalid phone, account banned) more prominently
 
 ---
 

@@ -52,6 +52,7 @@ function CampaignHistoryContent() {
   const [rerunModal, setRerunModal] = useState<Campaign | null>(null);
   const [rerunLoading, setRerunLoading] = useState(false);
   const [rerunStatus, setRerunStatus] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+  const [browserProcessing, setBrowserProcessing] = useState<{ campaignId: number; sent: number; failed: number; queued: number } | null>(null);
 
   // Load all campaigns
   useEffect(() => {
@@ -124,6 +125,33 @@ function CampaignHistoryContent() {
     setRerunModal(campaign);
   };
 
+  const runBrowserProcessing = async (campaignId: number) => {
+    setBrowserProcessing({ campaignId, sent: 0, failed: 0, queued: 0 });
+    let isComplete = false;
+    while (!isComplete) {
+      try {
+        const res = await fetch('/api/process-campaign', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ campaignId }),
+        });
+        const data = await res.json();
+        isComplete = data.isComplete;
+        setBrowserProcessing({ campaignId, sent: data.sentTotal || 0, failed: data.failedTotal || 0, queued: data.queuedRemaining || 0 });
+        if (!isComplete) {
+          await new Promise(r => setTimeout(r, 3000));
+        }
+      } catch {
+        await new Promise(r => setTimeout(r, 5000));
+      }
+    }
+    setBrowserProcessing(null);
+    // Refresh campaign list after done
+    const h = await fetch('/api/send-campaign');
+    const hd = await h.json();
+    if (hd.campaigns) setCampaigns(hd.campaigns);
+  };
+
   const executeRerun = async (mode: 'resume' | 'fresh') => {
     if (!rerunModal) return;
     setRerunLoading(true);
@@ -136,15 +164,21 @@ function CampaignHistoryContent() {
       });
       const data = await res.json();
       if (res.ok) {
+        const campaignId = rerunModal.id;
         setRerunStatus({ type: 'success', message: '✅ ' + data.message });
         // Refresh campaigns list
         const h = await fetch('/api/send-campaign');
         const hd = await h.json();
         if (hd.campaigns) setCampaigns(hd.campaigns);
         // Also refresh detail if open
-        if (selectedCampaign && selectedCampaign.id === rerunModal.id) {
-          const updated = (hd.campaigns || []).find((c: Campaign) => c.id === rerunModal.id);
+        if (selectedCampaign && selectedCampaign.id === campaignId) {
+          const updated = (hd.campaigns || []).find((c: Campaign) => c.id === campaignId);
           if (updated) setSelectedCampaign(updated);
+        }
+        setRerunModal(null);
+        // If GitHub Actions not triggered, process in browser automatically
+        if (!data.workflowTriggered) {
+          runBrowserProcessing(campaignId);
         }
       } else {
         setRerunStatus({ type: 'error', message: '❌ ' + (data.message || 'Failed') });
@@ -160,6 +194,19 @@ function CampaignHistoryContent() {
     return m.status === messageFilter;
   });
 
+  const processingBanner = browserProcessing && (
+    <div className="fixed bottom-4 right-4 z-50 bg-blue-600 text-white px-5 py-3 rounded-xl shadow-2xl text-sm font-medium max-w-xs">
+      <div className="flex items-center gap-2 mb-1">
+        <span className="animate-spin">⏳</span>
+        <span className="font-bold">Sending messages...</span>
+      </div>
+      <div className="text-xs opacity-90">
+        ✅ Sent: {browserProcessing.sent} &nbsp; ❌ Failed: {browserProcessing.failed} &nbsp; Remaining: {browserProcessing.queued}
+      </div>
+      <div className="text-xs opacity-75 mt-1">Keep this tab open until complete</div>
+    </div>
+  );
+
   // Campaign Detail View
   if (selectedCampaign) {
     const parsedFilters = (() => {
@@ -169,6 +216,7 @@ function CampaignHistoryContent() {
 
     return (
       <>
+      {processingBanner}
       <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 p-4 sm:p-6">
         <div className="max-w-5xl mx-auto">
           <button
@@ -385,6 +433,7 @@ function CampaignHistoryContent() {
   // Campaign List View
   return (
     <>
+    {processingBanner}
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 p-4 sm:p-6">
       <div className="max-w-5xl mx-auto">
         <div className="flex justify-between items-center mb-6">
