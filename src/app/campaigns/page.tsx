@@ -522,6 +522,48 @@ export default function CampaignsPage() {
   };
 
   // Send campaign
+  const runCampaignInBrowser = async (campaignId: number, delayMinMs: number, delayMaxMs: number) => {
+    let done = false;
+
+    while (!done) {
+      try {
+        const res = await fetch('/api/process-campaign', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ campaignId }),
+        });
+        const data = await res.json();
+
+        if (!res.ok) {
+          setSendStatus({ type: 'error', message: `❌ Campaign paused: ${data.error || 'Process error'}` });
+          break;
+        }
+
+        done = Boolean(data.isComplete);
+
+        if (done) {
+          setSendStatus({
+            type: 'success',
+            message: `✅ Campaign completed. Sent: ${data.sentTotal || 0}, Failed: ${data.failedTotal || 0}`,
+          });
+          break;
+        }
+
+        const randomDelayMs = delayMinMs + Math.floor(Math.random() * Math.max(1, delayMaxMs - delayMinMs + 1));
+        await new Promise((resolve) => setTimeout(resolve, randomDelayMs));
+      } catch (err: any) {
+        setSendStatus({ type: 'error', message: `❌ Campaign stopped: ${err.message}` });
+        break;
+      }
+    }
+
+    try {
+      const histRes = await fetch('/api/send-campaign');
+      const histData = await histRes.json();
+      if (histData.campaigns) setCampaignHistory(histData.campaigns);
+    } catch {}
+  };
+
   const handleSendCampaign = async () => {
     if (!selectedAccountId || !selectedTemplate || selectedContacts.size === 0) return;
     if (!campaignName.trim()) {
@@ -555,12 +597,24 @@ export default function CampaignsPage() {
       });
       const data = await res.json();
       if (res.ok) {
-        setSendStatus({ type: 'success', message: `✅ Campaign "${campaignName}" started! ${data.uniquePhones} messages queued — running in the background. You can close this tab.` });
+        const delayBetweenMs = convertDelayToMs(delayBetween, delayUnit);
+        const minDelay = randomizeDelay ? Math.max(5000, Math.floor(delayBetweenMs * 0.5)) : delayBetweenMs;
+        const maxDelay = delayBetweenMs;
+
+        if (data.workflowTriggered) {
+          setSendStatus({ type: 'success', message: `✅ Campaign "${campaignName}" started! ${data.uniquePhones} messages queued — running in the background. You can close this tab.` });
+        } else {
+          setSendStatus({ type: 'success', message: `✅ Campaign "${campaignName}" queued. Background trigger is unavailable, so this tab will process messages now.` });
+          const initialDelayMs = Math.max(0, convertDelayToMs(delayBefore, delayUnit));
+          setTimeout(() => {
+            void runCampaignInBrowser(data.campaignId, minDelay, maxDelay);
+          }, initialDelayMs);
+        }
+
         // Refresh history
         const histRes = await fetch('/api/send-campaign');
         const histData = await histRes.json();
         if (histData.campaigns) setCampaignHistory(histData.campaigns);
-        // Start browser-driven sending loop
       } else {
         setSendStatus({ type: 'error', message: '❌ Failed: ' + (data.message || 'Unknown error') });
       }

@@ -17,6 +17,18 @@ interface PhoneEntry {
   ownerName: string;
 }
 
+function normalizePhone(rawPhone: string): string {
+  const digits = (rawPhone || '').replace(/[^0-9]/g, '');
+  if (!digits) return '';
+
+  if (digits.startsWith('971')) return digits;
+  if (digits.startsWith('00971')) return digits.slice(2);
+  if (digits.startsWith('05') && digits.length === 10) return `971${digits.slice(1)}`;
+  if (digits.startsWith('5') && digits.length === 9) return `971${digits}`;
+
+  return digits;
+}
+
 function deduplicatePhones(contacts: any[]): { entries: PhoneEntry[]; totalPhones: number; duplicates: number } {
   const phoneMap = new Map<string, PhoneEntry>();
   let totalPhones = 0;
@@ -29,7 +41,7 @@ function deduplicatePhones(contacts: any[]): { entries: PhoneEntry[]; totalPhone
     ];
 
     for (const { phone, num, name } of owners) {
-      const cleaned = (phone || '').replace(/[^0-9+]/g, '');
+      const cleaned = normalizePhone(phone || '');
       if (cleaned) {
         totalPhones++;
         if (!phoneMap.has(cleaned)) {
