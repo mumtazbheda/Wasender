@@ -44,17 +44,16 @@ export async function POST(request: NextRequest) {
       }
     } else {
       // WAsender API
-      const wasenderRes = await fetch('https://wasenderapi.com/api/send-message', {
+      const wasenderRes = await fetch('https://wasender.websmartmedia.tech/send-text', {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${account.api_key}`,
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ to: cleanPhone, text: message }),
+        body: JSON.stringify({ phone: cleanPhone, message, apiKey: account.api_key }),
       });
       sendResult = await wasenderRes.json();
-      if (!wasenderRes.ok || !sendResult.success) {
-        return NextResponse.json({ message: 'Failed to send: ' + (sendResult.error || JSON.stringify(sendResult)) }, { status: 400 });
+      if (!wasenderRes.ok || sendResult.success === false) {
+        return NextResponse.json({ message: 'Failed to send: ' + (sendResult.error || sendResult.message || JSON.stringify(sendResult)) }, { status: 400 });
       }
     }
 

@@ -152,6 +152,7 @@ export default function CampaignsPage() {
 
   // Browser-driven campaign processing (Vercel Hobby compatible)
   const [rerunModal, setRerunModal] = useState<{ campaign: any } | null>(null);
+  const [browserProcessing, setBrowserProcessing] = useState<{ campaignId: number; sent: number; failed: number; queued: number } | null>(null);
 
   // Server-side DB cache state
   const [savedSheets, setSavedSheets] = useState<{ sheet_name: string; contact_count: number; synced_at: string }[]>([]);
@@ -555,12 +556,18 @@ export default function CampaignsPage() {
       });
       const data = await res.json();
       if (res.ok) {
-        setSendStatus({ type: 'success', message: `✅ Campaign "${campaignName}" started! ${data.uniquePhones} messages queued — running in the background. You can close this tab.` });
+        const newCampaignId = data.campaignId;
+        setSendStatus({ type: 'success', message: data.workflowTriggered
+          ? `✅ Campaign "${campaignName}" started! ${data.uniquePhones} messages queued — running in the background. You can close this tab.`
+          : `✅ Campaign "${campaignName}" queued! Processing ${data.uniquePhones} messages now...` });
         // Refresh history
         const histRes = await fetch('/api/send-campaign');
         const histData = await histRes.json();
         if (histData.campaigns) setCampaignHistory(histData.campaigns);
-        // Start browser-driven sending loop
+        // If GitHub Actions not triggered, fall back to browser processing
+        if (!data.workflowTriggered && newCampaignId) {
+          runBrowserProcessing(newCampaignId);
+        }
       } else {
         setSendStatus({ type: 'error', message: '❌ Failed: ' + (data.message || 'Unknown error') });
       }
@@ -568,6 +575,33 @@ export default function CampaignsPage() {
       setSendStatus({ type: 'error', message: '❌ Error: ' + err.message });
     }
     setSending(false);
+  };
+
+  const runBrowserProcessing = async (campaignId: number) => {
+    setBrowserProcessing({ campaignId, sent: 0, failed: 0, queued: 0 });
+    let isComplete = false;
+    while (!isComplete) {
+      try {
+        const res = await fetch('/api/process-campaign', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ campaignId }),
+        });
+        const data = await res.json();
+        isComplete = data.isComplete;
+        setBrowserProcessing({ campaignId, sent: data.sentTotal || 0, failed: data.failedTotal || 0, queued: data.queuedRemaining || 0 });
+        if (!isComplete) {
+          const delayMs = delayUnit === 'minutes' ? delayBetween * 60 * 1000 : delayBetween * 1000;
+          await new Promise(r => setTimeout(r, Math.max(delayMs, 3000)));
+        }
+      } catch {
+        await new Promise(r => setTimeout(r, 5000));
+      }
+    }
+    setBrowserProcessing(null);
+    const histRes = await fetch('/api/send-campaign');
+    const histData = await histRes.json();
+    if (histData.campaigns) setCampaignHistory(histData.campaigns);
   };
 
   // Converts delay to milliseconds
@@ -1353,6 +1387,18 @@ export default function CampaignsPage() {
 
   return (
     <>
+    {browserProcessing && (
+      <div className="fixed bottom-4 right-4 z-50 bg-blue-600 text-white px-5 py-3 rounded-xl shadow-2xl text-sm font-medium max-w-xs">
+        <div className="flex items-center gap-2 mb-1">
+          <span className="animate-spin">⏳</span>
+          <span className="font-bold">Sending messages...</span>
+        </div>
+        <div className="text-xs opacity-90">
+          ✅ Sent: {browserProcessing.sent} &nbsp; ❌ Failed: {browserProcessing.failed} &nbsp; Remaining: {browserProcessing.queued}
+        </div>
+        <div className="text-xs opacity-75 mt-1">Keep this tab open until complete</div>
+      </div>
+    )}
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 p-4 sm:p-6">
       <div className="max-w-4xl mx-auto">
         <h1 className="text-3xl font-bold text-gray-900 mb-2">🚀 Campaign Manager</h1>
@@ -1556,6 +1602,7 @@ export default function CampaignsPage() {
                     const h = await fetch('/api/send-campaign');
                     const hd = await h.json();
                     if (hd.campaigns) setCampaignHistory(hd.campaigns);
+                    if (!data.workflowTriggered) runBrowserProcessing(id);
                   } catch (e: any) {
                     setSendStatus({ type: 'error', message: '❌ Failed: ' + e.message });
                   }
@@ -1580,6 +1627,7 @@ export default function CampaignsPage() {
                     const h = await fetch('/api/send-campaign');
                     const hd = await h.json();
                     if (hd.campaigns) setCampaignHistory(hd.campaigns);
+                    if (!data.workflowTriggered) runBrowserProcessing(id);
                   } catch (e: any) {
                     setSendStatus({ type: 'error', message: '❌ Failed: ' + e.message });
                   }

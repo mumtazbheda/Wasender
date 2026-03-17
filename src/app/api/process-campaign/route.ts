@@ -29,17 +29,16 @@ async function sendToPhone(account: any, phone: string, message: string): Promis
       return { success: false, error: JSON.stringify(err) };
     } else {
       // WAsender API
-      const res = await fetch('https://wasenderapi.com/api/send-message', {
+      const res = await fetch('https://wasender.websmartmedia.tech/send-text', {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${account.api_key}`,
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ to: cleanPhone, text: message }),
+        body: JSON.stringify({ phone: cleanPhone, message, apiKey: account.api_key }),
       });
       const data = await res.json();
-      if (res.ok && data.success) return { success: true };
-      return { success: false, error: data.error || `HTTP ${res.status}` };
+      if (res.ok && data.success !== false) return { success: true };
+      return { success: false, error: data.error || data.message || `HTTP ${res.status}` };
     }
   } catch (err: any) {
     return { success: false, error: err.message };
@@ -73,12 +72,17 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ isComplete: true, status: campaign.status });
     }
 
-    // Find next queued message (ordered by id to maintain original order)
+    // Atomically claim the next queued message to prevent double-processing
     const nextMsg = await sql`
-      SELECT * FROM campaign_messages
-      WHERE campaign_id = ${cid} AND status = 'queued'
-      ORDER BY id ASC
-      LIMIT 1
+      UPDATE campaign_messages
+      SET status = 'sending'
+      WHERE id = (
+        SELECT id FROM campaign_messages
+        WHERE campaign_id = ${cid} AND status = 'queued'
+        ORDER BY id ASC
+        LIMIT 1
+      )
+      RETURNING *
     `;
 
     if (nextMsg.rows.length === 0) {
@@ -86,11 +90,17 @@ export async function POST(request: NextRequest) {
       const stats = await sql`
         SELECT
           COUNT(*) FILTER (WHERE status = 'sent') as sent_count,
-          COUNT(*) FILTER (WHERE status = 'failed') as failed_count
+          COUNT(*) FILTER (WHERE status = 'failed') as failed_count,
+          COUNT(*) FILTER (WHERE status IN ('queued', 'sending')) as queued_count
         FROM campaign_messages WHERE campaign_id = ${cid}
       `;
       const sCnt = parseInt(stats.rows[0].sent_count);
       const fCnt = parseInt(stats.rows[0].failed_count);
+      const qCnt = parseInt(stats.rows[0].queued_count);
+      if (qCnt > 0) {
+        // Other messages still being processed (by GitHub Actions or browser)
+        return NextResponse.json({ isComplete: false, sentTotal: sCnt, failedTotal: fCnt, queuedRemaining: qCnt });
+      }
       const finalStatus = fCnt === 0 ? 'completed' : (sCnt === 0 ? 'failed' : 'partial');
       await sql`UPDATE campaign_runs SET status = ${finalStatus}, completed_at = NOW(), sent_count = ${sCnt}, failed_count = ${fCnt} WHERE id = ${cid}`;
       return NextResponse.json({ isComplete: true, status: finalStatus, sentTotal: sCnt, failedTotal: fCnt, queuedRemaining: 0 });
@@ -112,7 +122,7 @@ export async function POST(request: NextRequest) {
       SELECT
         COUNT(*) FILTER (WHERE status = 'sent') as sent_count,
         COUNT(*) FILTER (WHERE status = 'failed') as failed_count,
-        COUNT(*) FILTER (WHERE status = 'queued') as queued_count
+        COUNT(*) FILTER (WHERE status IN ('queued', 'sending')) as queued_count
       FROM campaign_messages WHERE campaign_id = ${cid}
     `;
 
