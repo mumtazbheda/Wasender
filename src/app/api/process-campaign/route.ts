@@ -1,9 +1,21 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { sql } from '@/lib/db';
 
+function normalizePhone(rawPhone: string): string {
+  const digits = (rawPhone || '').replace(/[^0-9]/g, '');
+  if (!digits) return '';
+
+  if (digits.startsWith('971')) return digits;
+  if (digits.startsWith('00971')) return digits.slice(2);
+  if (digits.startsWith('05') && digits.length === 10) return `971${digits.slice(1)}`;
+  if (digits.startsWith('5') && digits.length === 9) return `971${digits}`;
+
+  return digits;
+}
+
 async function sendToPhone(account: any, phone: string, message: string): Promise<{ success: boolean; error?: string }> {
   try {
-    const cleanPhone = phone.replace(/[^0-9+]/g, '');
+    const cleanPhone = normalizePhone(phone || '');
     if (!cleanPhone) return { success: false, error: 'No phone number' };
 
     if (account.account_type === 'whatsapp_business') {
@@ -29,17 +41,21 @@ async function sendToPhone(account: any, phone: string, message: string): Promis
       return { success: false, error: JSON.stringify(err) };
     } else {
       // WAsender API
-      const res = await fetch('https://wasenderapi.com/api/send-message', {
+      const res = await fetch('https://wasender.websmartmedia.tech/send-text', {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${account.api_key}`,
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ to: cleanPhone, text: message }),
+        body: JSON.stringify({
+          phone: cleanPhone,
+          message,
+          apiKey: account.api_key,
+        }),
       });
-      const data = await res.json();
-      if (res.ok && data.success) return { success: true };
-      return { success: false, error: data.error || `HTTP ${res.status}` };
+      const contentType = res.headers.get('content-type') || '';
+      const data = contentType.includes('application/json') ? await res.json() : { raw: await res.text() };
+      if (res.ok) return { success: true };
+      return { success: false, error: data?.error || data?.message || `HTTP ${res.status}` };
     }
   } catch (err: any) {
     return { success: false, error: err.message };
