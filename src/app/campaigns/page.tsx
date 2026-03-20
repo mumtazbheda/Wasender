@@ -511,7 +511,7 @@ export default function CampaignsPage() {
     const count = selectedContacts.size;
     if (count === 0) return 'No contacts selected';
     const beforeMs = delayBefore * (delayUnit === 'minutes' ? 60 : delayUnit === 'hours' ? 3600 : 1);
-    const betweenMs = delayBetween * (count - 1) * (delayUnit === 'minutes' ? 60 : delayUnit === 'hours' ? 3600 : 1);
+    const betweenMs = ((delayMin + delayMax) / 2) * (count - 1) * (delayUnit === 'minutes' ? 60 : delayUnit === 'hours' ? 3600 : 1);
     const totalSeconds = beforeMs + betweenMs;
     if (totalSeconds < 60) return `~${totalSeconds} seconds`;
     if (totalSeconds < 3600) return `~${Math.ceil(totalSeconds / 60)} minutes`;
@@ -1465,8 +1465,7 @@ export default function CampaignsPage() {
               <div className="space-y-1 text-sm">
                 <p>📧 Messages to send: <span className="font-bold">{selectedContacts.size}</span></p>
                 <p>⏱️ Initial delay: <span className="font-bold">{delayBefore} {delayUnit}</span></p>
-                <p>⏳ Between messages: <span className="font-bold">{delayBetween} {delayUnit}</span></p>
-                {randomizeDelay && <p>🔀 Randomization: <span className="font-bold">±20%</span></p>}
+                <p>⏳ Between messages: <span className="font-bold">{delayMin}–{delayMax} {delayUnit} (random)</span></p>
                 <p>⏰ Estimated duration: <span className="font-bold">{calculateEstimatedDuration()}</span></p>
                 {scheduleEnabled && scheduledDate && (
                   <p>📅 Scheduled for: <span className="font-bold">{scheduledDate} {scheduledTime}</span></p>
@@ -1568,7 +1567,7 @@ export default function CampaignsPage() {
               </div>
               <div>
                 <p className="text-sm text-gray-500">Delay Between</p>
-                <p className="font-bold text-gray-900">{delayBetween} {delayUnit} {randomizeDelay ? '(±20%)' : ''}</p>
+                <p className="font-bold text-gray-900">{delayMin}–{delayMax} {delayUnit} (random)</p>
               </div>
               <div>
                 <p className="text-sm text-gray-500">Sheet</p>
