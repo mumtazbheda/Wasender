@@ -54,8 +54,8 @@ async function sendToPhone(account: any, phone: string, message: string): Promis
       });
       const contentType = res.headers.get('content-type') || '';
       const data = contentType.includes('application/json') ? await res.json() : { raw: await res.text() };
-      if (res.ok) return { success: true };
-      return { success: false, error: data?.error || data?.message || `HTTP ${res.status}` };
+      if (res.ok && data.success !== false) return { success: true };
+      return { success: false, error: data?.error || data?.message || (data?.raw ? String(data.raw).slice(0, 200) : `HTTP ${res.status}`) };
     }
   } catch (err: any) {
     return { success: false, error: err.message };

@@ -52,7 +52,7 @@ function CampaignHistoryContent() {
   const [rerunModal, setRerunModal] = useState<Campaign | null>(null);
   const [rerunLoading, setRerunLoading] = useState(false);
   const [rerunStatus, setRerunStatus] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
-  const [browserProcessing, setBrowserProcessing] = useState<{ campaignId: number; sent: number; failed: number; queued: number } | null>(null);
+  const [browserProcessing, setBrowserProcessing] = useState<{ campaignId: number; sent: number; failed: number; queued: number; lastError?: string } | null>(null);
 
   // Load all campaigns
   useEffect(() => {
@@ -137,7 +137,7 @@ function CampaignHistoryContent() {
         });
         const data = await res.json();
         isComplete = data.isComplete;
-        setBrowserProcessing({ campaignId, sent: data.sentTotal || 0, failed: data.failedTotal || 0, queued: data.queuedRemaining || 0 });
+        setBrowserProcessing({ campaignId, sent: data.sentTotal || 0, failed: data.failedTotal || 0, queued: data.queuedRemaining || 0, lastError: data.error || undefined });
         if (!isComplete) {
           await new Promise(r => setTimeout(r, 3000));
         }
@@ -195,7 +195,7 @@ function CampaignHistoryContent() {
   });
 
   const processingBanner = browserProcessing && (
-    <div className="fixed bottom-4 right-4 z-50 bg-blue-600 text-white px-5 py-3 rounded-xl shadow-2xl text-sm font-medium max-w-xs">
+    <div className="fixed bottom-4 right-4 z-50 bg-blue-600 text-white px-5 py-3 rounded-xl shadow-2xl text-sm font-medium max-w-sm">
       <div className="flex items-center gap-2 mb-1">
         <span className="animate-spin">⏳</span>
         <span className="font-bold">Sending messages...</span>
@@ -203,6 +203,11 @@ function CampaignHistoryContent() {
       <div className="text-xs opacity-90">
         ✅ Sent: {browserProcessing.sent} &nbsp; ❌ Failed: {browserProcessing.failed} &nbsp; Remaining: {browserProcessing.queued}
       </div>
+      {browserProcessing.lastError && (
+        <div className="text-xs mt-2 bg-red-500 bg-opacity-80 rounded px-2 py-1">
+          Last error: {browserProcessing.lastError}
+        </div>
+      )}
       <div className="text-xs opacity-75 mt-1">Keep this tab open until complete</div>
     </div>
   );

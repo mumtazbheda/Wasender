@@ -152,7 +152,7 @@ export default function CampaignsPage() {
 
   // Browser-driven campaign processing (Vercel Hobby compatible)
   const [rerunModal, setRerunModal] = useState<{ campaign: any } | null>(null);
-  const [browserProcessing, setBrowserProcessing] = useState<{ campaignId: number; sent: number; failed: number; queued: number } | null>(null);
+  const [browserProcessing, setBrowserProcessing] = useState<{ campaignId: number; sent: number; failed: number; queued: number; lastError?: string } | null>(null);
 
   // Server-side DB cache state
   const [savedSheets, setSavedSheets] = useState<{ sheet_name: string; contact_count: number; synced_at: string }[]>([]);
@@ -638,7 +638,7 @@ export default function CampaignsPage() {
         });
         const data = await res.json();
         isComplete = data.isComplete;
-        setBrowserProcessing({ campaignId, sent: data.sentTotal || 0, failed: data.failedTotal || 0, queued: data.queuedRemaining || 0 });
+        setBrowserProcessing({ campaignId, sent: data.sentTotal || 0, failed: data.failedTotal || 0, queued: data.queuedRemaining || 0, lastError: data.error || undefined });
         if (!isComplete) {
           const delayMs = delayUnit === 'minutes' ? delayBetween * 60 * 1000 : delayBetween * 1000;
           await new Promise(r => setTimeout(r, Math.max(delayMs, 3000)));
@@ -1437,7 +1437,7 @@ export default function CampaignsPage() {
   return (
     <>
     {browserProcessing && (
-      <div className="fixed bottom-4 right-4 z-50 bg-blue-600 text-white px-5 py-3 rounded-xl shadow-2xl text-sm font-medium max-w-xs">
+      <div className="fixed bottom-4 right-4 z-50 bg-blue-600 text-white px-5 py-3 rounded-xl shadow-2xl text-sm font-medium max-w-sm">
         <div className="flex items-center gap-2 mb-1">
           <span className="animate-spin">⏳</span>
           <span className="font-bold">Sending messages...</span>
@@ -1445,6 +1445,11 @@ export default function CampaignsPage() {
         <div className="text-xs opacity-90">
           ✅ Sent: {browserProcessing.sent} &nbsp; ❌ Failed: {browserProcessing.failed} &nbsp; Remaining: {browserProcessing.queued}
         </div>
+        {browserProcessing.lastError && (
+          <div className="text-xs mt-2 bg-red-500 bg-opacity-80 rounded px-2 py-1">
+            Last error: {browserProcessing.lastError}
+          </div>
+        )}
         <div className="text-xs opacity-75 mt-1">Keep this tab open until complete</div>
       </div>
     )}
