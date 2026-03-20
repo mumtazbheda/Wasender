@@ -40,16 +40,16 @@ async function sendToPhone(account: any, phone: string, message: string): Promis
       const err = await res.json();
       return { success: false, error: JSON.stringify(err) };
     } else {
-      // WAsender API
-      const res = await fetch('https://wasender.websmartmedia.tech/send-text', {
+      // WAsender API (wasenderapi.com)
+      const res = await fetch('https://wasenderapi.com/api/send-message', {
         method: 'POST',
         headers: {
+          'Authorization': `Bearer ${account.api_key}`,
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          phone: cleanPhone,
-          message,
-          apiKey: account.api_key,
+          to: cleanPhone,
+          text: message,
         }),
       });
       const contentType = res.headers.get('content-type') || '';
@@ -58,7 +58,8 @@ async function sendToPhone(account: any, phone: string, message: string): Promis
       return { success: false, error: data?.error || data?.message || (data?.raw ? String(data.raw).slice(0, 200) : `HTTP ${res.status}`) };
     }
   } catch (err: any) {
-    return { success: false, error: err.message };
+    const cause = (err as any)?.cause?.message || (err as any)?.cause?.code || '';
+    return { success: false, error: cause ? `${err.message}: ${cause}` : err.message };
   }
 }
 
