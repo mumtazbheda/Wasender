@@ -103,7 +103,7 @@ export async function POST(request: NextRequest) {
     const {
       campaignName, contacts, templateName, templateBody,
       accountId, accountName, sheetTab,
-      delayBefore, delayBetween, delayUnit, randomizeDelay, filtersUsed
+      delayBefore, delayMin: rawDelayMin, delayMax: rawDelayMax, delayUnit, filtersUsed
     } = body;
 
     if (!contacts?.length || !templateBody || !accountId) {
@@ -118,17 +118,16 @@ export async function POST(request: NextRequest) {
 
     const { entries: uniquePhones, totalPhones, duplicates } = deduplicatePhones(contacts);
 
-    // Calculate delay in seconds
-    const rawDelay = parseInt(String(delayBetween || 5));
+    // Convert delay range to seconds for GitHub Actions
     const unit = delayUnit || 'seconds';
-    const delaySeconds = unit === 'minutes' ? rawDelay * 60 : rawDelay;
-    const delayMin = randomizeDelay ? Math.max(5, Math.floor(delaySeconds * 0.5)) : delaySeconds;
-    const delayMax = randomizeDelay ? delaySeconds : delaySeconds;
+    const toSeconds = (v: number) => unit === 'minutes' ? v * 60 : unit === 'hours' ? v * 3600 : v;
+    const delayMin = Math.max(1, toSeconds(parseInt(String(rawDelayMin || 10))));
+    const delayMax = Math.max(delayMin, toSeconds(parseInt(String(rawDelayMax || 45))));
 
     // Create campaign record
     const campaignResult = await sql`
-      INSERT INTO campaign_runs (name, account_id, account_name, template_name, template_body, sheet_tab, total_contacts, total_unique_phones, duplicates_removed, status, filters_used, delay_before, delay_between, delay_unit, randomize_delay, started_at)
-      VALUES (${campaignName || 'Unnamed Campaign'}, ${parseInt(accountId)}, ${accountName || account.name || ''}, ${templateName || 'Unnamed'}, ${templateBody}, ${sheetTab || ''}, ${contacts.length}, ${uniquePhones.length}, ${duplicates}, 'in_progress', ${filtersUsed || ''}, ${delayBefore || 0}, ${delayBetween || 5}, ${delayUnit || 'seconds'}, ${randomizeDelay || false}, NOW())
+      INSERT INTO campaign_runs (name, account_id, account_name, template_name, template_body, sheet_tab, total_contacts, total_unique_phones, duplicates_removed, status, filters_used, delay_before, delay_min, delay_between, delay_unit, randomize_delay, started_at)
+      VALUES (${campaignName || 'Unnamed Campaign'}, ${parseInt(accountId)}, ${accountName || account.name || ''}, ${templateName || 'Unnamed'}, ${templateBody}, ${sheetTab || ''}, ${contacts.length}, ${uniquePhones.length}, ${duplicates}, 'in_progress', ${filtersUsed || ''}, ${delayBefore || 0}, ${delayMin}, ${delayMax}, ${delayUnit || 'seconds'}, true, NOW())
       RETURNING id
     `;
     const campaignId = campaignResult.rows[0].id;

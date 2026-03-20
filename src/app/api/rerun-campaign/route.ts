@@ -66,12 +66,11 @@ export async function POST(request: NextRequest) {
       WHERE id = ${cid}
     `;
 
-    // Calculate delay
-    const rawDelay = parseInt(String(campaign.delay_between || 5));
+    // Calculate delay from stored min/max
     const unit = campaign.delay_unit || 'seconds';
-    const delaySeconds = unit === 'minutes' ? rawDelay * 60 : rawDelay;
-    const delayMin = campaign.randomize_delay ? Math.max(5, Math.floor(delaySeconds * 0.5)) : delaySeconds;
-    const delayMax = campaign.randomize_delay ? delaySeconds : delaySeconds;
+    const toSeconds = (v: number) => unit === 'minutes' ? v * 60 : unit === 'hours' ? v * 3600 : v;
+    const delayMax = Math.max(1, toSeconds(parseInt(String(campaign.delay_between || 45))));
+    const delayMin = Math.max(1, Math.min(toSeconds(parseInt(String(campaign.delay_min || campaign.delay_between || 10))), delayMax));
 
     const workflowTriggered = await triggerGithubWorkflow(cid, delayMin, delayMax);
 
