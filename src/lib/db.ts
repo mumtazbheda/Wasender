@@ -90,6 +90,7 @@ export async function initializeDatabase() {
   await sql`ALTER TABLE campaign_runs ADD COLUMN IF NOT EXISTS sheet_tab TEXT DEFAULT ''`;
   await sql`ALTER TABLE campaign_runs ADD COLUMN IF NOT EXISTS total_unique_phones INTEGER DEFAULT 0`;
   await sql`ALTER TABLE campaign_runs ADD COLUMN IF NOT EXISTS duplicates_removed INTEGER DEFAULT 0`;
+  await sql`ALTER TABLE campaign_runs ADD COLUMN IF NOT EXISTS delay_min INTEGER DEFAULT 5`;
 
   // Campaign Messages Log - enhanced with owner_num tracking
   await sql`

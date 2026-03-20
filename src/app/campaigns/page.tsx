@@ -123,9 +123,9 @@ export default function CampaignsPage() {
 
   // Delay settings
   const [delayBefore, setDelayBefore] = useState(0);
-  const [delayBetween, setDelayBetween] = useState(5);
+  const [delayMin, setDelayMin] = useState(10);
+  const [delayMax, setDelayMax] = useState(45);
   const [delayUnit, setDelayUnit] = useState('seconds');
-  const [randomizeDelay, setRandomizeDelay] = useState(false);
 
   // Account selection
   const [accounts, setAccounts] = useState<any[]>([]);
@@ -135,6 +135,7 @@ export default function CampaignsPage() {
   // Test message
   const [testSending, setTestSending] = useState(false);
   const [testStatus, setTestStatus] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+  const [testAccountId, setTestAccountId] = useState('');
 
   // Campaign sending
   const [sending, setSending] = useState(false);
@@ -192,18 +193,32 @@ export default function CampaignsPage() {
   }, [status]);
 
   // Load templates
-  useEffect(() => {
-    const loadTemplates = async () => {
-      try {
-        const res = await fetch("/api/templates");
-        const data = await res.json();
-        setTemplates(data.templates || []);
-      } catch (err) {
-        console.error("Failed to load templates:", err);
+  const loadTemplates = async () => {
+    try {
+      const res = await fetch("/api/templates");
+      const data = await res.json();
+      setTemplates(data.templates || []);
+    } catch (err) {
+      console.error("Failed to load templates:", err);
+    }
+  };
+
+  useEffect(() => { loadTemplates(); }, []);
+
+  const duplicateTemplate = async (template: Template) => {
+    try {
+      const res = await fetch('/api/templates', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: template.name + ' (copy)', body: template.body }),
+      });
+      if (res.ok) {
+        await loadTemplates();
       }
-    };
-    loadTemplates();
-  }, []);
+    } catch (err) {
+      console.error('Failed to duplicate template:', err);
+    }
+  };
 
   // Load accounts
   useEffect(() => {
@@ -476,7 +491,7 @@ export default function CampaignsPage() {
         body: JSON.stringify({
           phone: testPhone,
           message,
-          accountId: selectedAccountId,
+          accountId: testAccountId || selectedAccountId,
         }),
       });
       const data = await res.json();
@@ -590,17 +605,16 @@ export default function CampaignsPage() {
           accountName: selectedAccountData?.name || 'Unknown',
           sheetTab: selectedSheet,
           delayBefore,
-          delayBetween,
+          delayMin,
+          delayMax,
           delayUnit,
-          randomizeDelay,
           filtersUsed: JSON.stringify(filters),
         }),
       });
       const data = await res.json();
       if (res.ok) {
-        const delayBetweenMs = convertDelayToMs(delayBetween, delayUnit);
-        const minDelay = randomizeDelay ? Math.max(5000, Math.floor(delayBetweenMs * 0.5)) : delayBetweenMs;
-        const maxDelay = delayBetweenMs;
+        const minDelay = convertDelayToMs(delayMin, delayUnit);
+        const maxDelay = convertDelayToMs(delayMax, delayUnit);
 
         if (data.workflowTriggered) {
           setSendStatus({ type: 'success', message: `✅ Campaign "${campaignName}" started! ${data.uniquePhones} messages queued — running in the background. You can close this tab.` });
@@ -640,8 +654,10 @@ export default function CampaignsPage() {
         isComplete = data.isComplete;
         setBrowserProcessing({ campaignId, sent: data.sentTotal || 0, failed: data.failedTotal || 0, queued: data.queuedRemaining || 0, lastError: data.error || undefined });
         if (!isComplete) {
-          const delayMs = delayUnit === 'minutes' ? delayBetween * 60 * 1000 : delayBetween * 1000;
-          await new Promise(r => setTimeout(r, Math.max(delayMs, 3000)));
+          const minMs = convertDelayToMs(delayMin, delayUnit);
+          const maxMs = convertDelayToMs(delayMax, delayUnit);
+          const randomMs = minMs + Math.floor(Math.random() * Math.max(1, maxMs - minMs + 1));
+          await new Promise(r => setTimeout(r, Math.max(randomMs, 3000)));
         }
       } catch {
         await new Promise(r => setTimeout(r, 5000));
@@ -953,6 +969,18 @@ export default function CampaignsPage() {
             </div>
           )}
 
+          {/* Top Next Button (before contacts list) */}
+          {filteredContacts.length > 0 && selectedContacts.size > 0 && (
+            <div className="flex gap-4 mb-2">
+              <button
+                onClick={() => setStep(2)}
+                className="flex-1 px-6 py-3 bg-green-600 hover:bg-green-700 text-white rounded-lg transition font-bold"
+              >
+                Next: Select Template ({selectedContacts.size} selected) ↓
+              </button>
+            </div>
+          )}
+
           {/* Contacts List */}
           {filteredContacts.length > 0 && (
             <div className="bg-white rounded-lg shadow-md p-6 mb-6">
@@ -1179,56 +1207,94 @@ export default function CampaignsPage() {
           <div className="bg-white rounded-lg shadow-md p-6 space-y-6">
             {/* Template Selection */}
             <div>
-              <label className="block text-lg font-bold text-gray-900 mb-3">
-                Select Template
-              </label>
-              <select
-                value={selectedTemplate}
-                onChange={(e) => {
-                  setSelectedTemplate(e.target.value);
-                  setShowPreview(false);
-                  setTestPhone("");
-                }}
-                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 font-medium"
-              >
-                <option value="">Choose a template...</option>
-                {templates.map((template) => (
-                  <option key={template.id} value={template.id}>
-                    {template.name}
-                  </option>
-                ))}
-              </select>
+              <div className="flex justify-between items-center mb-3">
+                <label className="block text-lg font-bold text-gray-900">
+                  Select Template
+                </label>
+                <a
+                  href="/templates"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-sm font-bold rounded-lg transition"
+                >
+                  + Create New Template
+                </a>
+              </div>
+              <div className="flex gap-2">
+                <select
+                  value={selectedTemplate}
+                  onChange={(e) => {
+                    setSelectedTemplate(e.target.value);
+                    setShowPreview(false);
+                    setTestPhone("");
+                  }}
+                  className="flex-1 px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 font-medium"
+                >
+                  <option value="">Choose a template...</option>
+                  {templates.map((template) => (
+                    <option key={template.id} value={template.id}>
+                      {template.name}
+                    </option>
+                  ))}
+                </select>
+                {selectedTemplate && (
+                  <button
+                    onClick={() => {
+                      const t = templates.find(t => String(t.id) === String(selectedTemplate));
+                      if (t) duplicateTemplate(t);
+                    }}
+                    title="Duplicate this template"
+                    className="px-3 py-3 bg-gray-200 hover:bg-gray-300 text-gray-700 text-sm font-bold rounded-lg transition whitespace-nowrap"
+                  >
+                    ⧉ Duplicate
+                  </button>
+                )}
+              </div>
             </div>
 
             {/* Test Mode */}
             {selectedTemplate && (
-              <div className="bg-gray-50 p-4 rounded-lg">
-                <label className="block text-sm font-bold text-gray-700 mb-2">
-                  Test Mode - Enter Test Phone Number (optional)
+              <div className="bg-gray-50 p-4 rounded-lg space-y-3">
+                <label className="block text-sm font-bold text-gray-700">
+                  Test Mode — Send a preview to your phone
                 </label>
+                {/* Account selector for test */}
+                <div>
+                  <label className="block text-xs text-gray-500 mb-1">Send test via account:</label>
+                  <select
+                    value={testAccountId || selectedAccountId}
+                    onChange={(e) => setTestAccountId(e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 text-sm"
+                  >
+                    <option value="">-- Select account --</option>
+                    {accounts.map((a: any) => (
+                      <option key={a.id} value={a.id}>{a.name}</option>
+                    ))}
+                  </select>
+                </div>
                 <input
                   type="text"
                   value={testPhone}
                   onChange={(e) => setTestPhone(e.target.value)}
-                  placeholder="Enter phone number to preview with placeholders"
+                  placeholder="Enter phone number (e.g. 971501234567)"
                   className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
                 />
                 {testPhone && (
-                  <div className="mt-3 flex items-center gap-3">
+                  <div className="flex items-center gap-3">
                     <button
                       onClick={handleSendTest}
-                      disabled={testSending || !selectedAccountId}
+                      disabled={testSending || !(testAccountId || selectedAccountId)}
                       className="px-6 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white rounded-lg transition font-bold text-sm"
                     >
                       {testSending ? '⏳ Sending...' : '📤 Send Test Message'}
                     </button>
-                    {!selectedAccountId && (
-                      <p className="text-sm text-red-500">No WhatsApp account configured. Go to Accounts page first.</p>
+                    {!(testAccountId || selectedAccountId) && (
+                      <p className="text-sm text-red-500">Please select an account above.</p>
                     )}
                   </div>
                 )}
                 {testStatus && (
-                  <div className={`mt-3 p-3 rounded-lg text-sm font-medium ${
+                  <div className={`p-3 rounded-lg text-sm font-medium ${
                     testStatus.type === 'success' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
                   }`}>
                     {testStatus.message}
@@ -1321,34 +1387,44 @@ export default function CampaignsPage() {
               </div>
             </div>
 
-            {/* Delay Between */}
+            {/* Delay Between - Min/Max Range */}
             <div>
-              <label className="block text-lg font-bold text-gray-900 mb-2">⏳ Delay Between Messages</label>
-              <p className="text-sm text-gray-500 mb-3">Wait this long between each message to avoid detection</p>
-              <div className="flex gap-3">
-                <input
-                  type="number"
-                  min={0}
-                  value={delayBetween}
-                  onChange={(e) => setDelayBetween(parseInt(e.target.value) || 0)}
-                  className="w-32 px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 font-medium"
-                />
-                <span className="flex items-center text-gray-600 font-medium">{delayUnit}</span>
+              <label className="block text-lg font-bold text-gray-900 mb-2">⏳ Delay Between Messages (Random Range)</label>
+              <p className="text-sm text-gray-500 mb-3">
+                A random delay will be picked between Min and Max for each message — making the sending pattern look human and unpredictable to WhatsApp.
+              </p>
+              <div className="flex gap-4 items-end flex-wrap">
+                <div>
+                  <label className="block text-xs text-gray-500 mb-1 font-medium">Min Delay</label>
+                  <div className="flex gap-2">
+                    <input
+                      type="number"
+                      min={1}
+                      value={delayMin}
+                      onChange={(e) => setDelayMin(parseInt(e.target.value) || 1)}
+                      className="w-28 px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 font-medium"
+                    />
+                    <span className="flex items-center text-gray-600 font-medium text-sm">{delayUnit}</span>
+                  </div>
+                </div>
+                <div className="text-2xl text-gray-400 pb-3">→</div>
+                <div>
+                  <label className="block text-xs text-gray-500 mb-1 font-medium">Max Delay</label>
+                  <div className="flex gap-2">
+                    <input
+                      type="number"
+                      min={1}
+                      value={delayMax}
+                      onChange={(e) => setDelayMax(parseInt(e.target.value) || 1)}
+                      className="w-28 px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 font-medium"
+                    />
+                    <span className="flex items-center text-gray-600 font-medium text-sm">{delayUnit}</span>
+                  </div>
+                </div>
               </div>
-            </div>
-
-            {/* Randomize */}
-            <div className="flex items-center gap-3">
-              <input
-                type="checkbox"
-                checked={randomizeDelay}
-                onChange={(e) => setRandomizeDelay(e.target.checked)}
-                className="w-5 h-5 cursor-pointer"
-              />
-              <div>
-                <label className="font-bold text-gray-900">🔀 Randomize Delays</label>
-                <p className="text-sm text-gray-500">Adds ±20% variation to delay times to appear more natural</p>
-              </div>
+              <p className="text-xs text-blue-600 mt-2 font-medium">
+                Example: with {delayMin}–{delayMax} {delayUnit}, each message will wait a random amount between {delayMin} and {delayMax} {delayUnit}.
+              </p>
             </div>
 
             {/* Schedule Option */}
