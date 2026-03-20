@@ -43,13 +43,14 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ message: 'Failed to send: ' + JSON.stringify(sendResult) }, { status: 400 });
       }
     } else {
-      // WAsender API
-      const wasenderRes = await fetch('https://wasender.websmartmedia.tech/send-text', {
+      // WAsender API (wasenderapi.com)
+      const wasenderRes = await fetch('https://wasenderapi.com/api/send-message', {
         method: 'POST',
         headers: {
+          'Authorization': `Bearer ${account.api_key}`,
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ phone: cleanPhone, message, apiKey: account.api_key }),
+        body: JSON.stringify({ to: cleanPhone, text: message }),
       });
       sendResult = await wasenderRes.json();
       if (!wasenderRes.ok || sendResult.success === false) {
