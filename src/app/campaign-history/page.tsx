@@ -146,6 +146,42 @@ function CampaignHistoryContent() {
       }
     }
     setBrowserProcessing(null);
+    // Update feedback in DB cache + Google Sheet
+    try {
+      const detailRes = await fetch(`/api/campaign-detail/${campaignId}`);
+      if (detailRes.ok) {
+        const detail = await detailRes.json();
+        const campaign = detail.campaign;
+        const sentMessages: any[] = (detail.messages || []).filter((m: any) => m.status === 'sent' && m.row_index != null);
+        if (sentMessages.length && campaign?.sheet_tab && campaign?.account_name) {
+          const timestamp = new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+          const feedbackValue = `Message Sent - ${timestamp}`;
+          const acct = (campaign.account_name || '').toLowerCase();
+          for (const msg of sentMessages) {
+            const ownerNum = msg.owner_num || 1;
+            let feedbackKey = '';
+            if (acct.includes('ahmed')) feedbackKey = `ahmed_feedback_${ownerNum}`;
+            else if (acct.includes('zoha') || acct.includes('soha')) feedbackKey = `zoha_feedback_${ownerNum}`;
+            if (!feedbackKey) continue;
+            await fetch('/api/contacts-cache', {
+              method: 'PATCH',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ sheetName: campaign.sheet_tab, rowIndex: msg.row_index, updates: { [feedbackKey]: feedbackValue } }),
+            });
+          }
+          await fetch('/api/sheet-update-direct', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              action: 'update-feedback',
+              sheetTab: campaign.sheet_tab,
+              accountName: campaign.account_name,
+              updates: sentMessages.map((m: any) => ({ rowIndex: m.row_index, ownerNum: m.owner_num || 1 })),
+            }),
+          });
+        }
+      }
+    } catch (err) { console.error('Feedback update failed:', err); }
     // Refresh campaign list after done
     const h = await fetch('/api/send-campaign');
     const hd = await h.json();

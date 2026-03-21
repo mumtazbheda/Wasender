@@ -537,6 +537,61 @@ export default function CampaignsPage() {
     return phoneMap;
   };
 
+  // After campaign completes: update DB cache + write back to Google Sheet
+  const updateFeedbackAfterCampaign = async (campaignId: number) => {
+    try {
+      // 1. Fetch campaign detail (sent messages + campaign metadata)
+      const detailRes = await fetch(`/api/campaign-detail/${campaignId}`);
+      if (!detailRes.ok) return;
+      const detail = await detailRes.json();
+      const campaign = detail.campaign;
+      const sentMessages: any[] = (detail.messages || []).filter((m: any) => m.status === 'sent' && m.row_index != null);
+      if (!sentMessages.length || !campaign?.sheet_tab || !campaign?.account_name) return;
+
+      const timestamp = new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+      const feedbackValue = `Message Sent - ${timestamp}`;
+
+      // 2. Update DB cache for each sent contact
+      for (const msg of sentMessages) {
+        // Determine which feedback key to update based on account name and owner number
+        const acct = (campaign.account_name || '').toLowerCase();
+        const ownerNum = msg.owner_num || 1;
+        let feedbackKey = '';
+        if (acct.includes('ahmed')) feedbackKey = `ahmed_feedback_${ownerNum}`;
+        else if (acct.includes('zoha') || acct.includes('soha')) feedbackKey = `zoha_feedback_${ownerNum}`;
+        if (!feedbackKey) continue;
+
+        await fetch('/api/contacts-cache', {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            sheetName: campaign.sheet_tab,
+            rowIndex: msg.row_index,
+            updates: { [feedbackKey]: feedbackValue },
+          }),
+        });
+      }
+
+      // 3. Write back to Google Sheet
+      const sheetUpdates = sentMessages.map((msg: any) => ({
+        rowIndex: msg.row_index,
+        ownerNum: msg.owner_num || 1,
+      }));
+      await fetch('/api/sheet-update-direct', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'update-feedback',
+          sheetTab: campaign.sheet_tab,
+          accountName: campaign.account_name,
+          updates: sheetUpdates,
+        }),
+      });
+    } catch (err) {
+      console.error('Feedback update failed:', err);
+    }
+  };
+
   // Send campaign
   const runCampaignInBrowser = async (campaignId: number, delayMinMs: number, delayMaxMs: number) => {
     let done = false;
@@ -560,7 +615,12 @@ export default function CampaignsPage() {
         if (done) {
           setSendStatus({
             type: 'success',
-            message: `✅ Campaign completed. Sent: ${data.sentTotal || 0}, Failed: ${data.failedTotal || 0}`,
+            message: `✅ Campaign completed. Sent: ${data.sentTotal || 0}, Failed: ${data.failedTotal || 0}. Updating sheet...`,
+          });
+          await updateFeedbackAfterCampaign(campaignId);
+          setSendStatus({
+            type: 'success',
+            message: `✅ Campaign completed. Sent: ${data.sentTotal || 0}, Failed: ${data.failedTotal || 0}. Sheet updated.`,
           });
           break;
         }
@@ -664,6 +724,7 @@ export default function CampaignsPage() {
       }
     }
     setBrowserProcessing(null);
+    await updateFeedbackAfterCampaign(campaignId);
     const histRes = await fetch('/api/send-campaign');
     const histData = await histRes.json();
     if (histData.campaigns) setCampaignHistory(histData.campaigns);
