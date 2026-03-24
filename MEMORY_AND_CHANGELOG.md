@@ -86,7 +86,7 @@
 - **Success check:** `res.ok && data.success !== false`
 
 ### Google Sheets
-- **Sheet ID:** `1q_OYmnZsW_wMEqlGh3dYJFb0OFzKdB_XUJwfexvhGiY`
+- **Sheet ID:** `1f--c_bNEofTc3-Qjjt4stqu5blxPHvgUTlHppqBrOfc`
 - **Sheet name:** `"Time_1 WhatsApp"`
 - **Complete mapping:** `/agent/home/sheets-fixed.ts`
 - **Key columns:**
@@ -206,7 +206,7 @@ Campaign send → /api/send-campaign → queues in DB → triggers GitHub Action
 | `GOOGLE_CLIENT_SECRET` | Google OAuth for Sheets access |
 | `NEXTAUTH_SECRET` | NextAuth secret |
 | `POSTGRES_URL` (+PRISMA, NON_POOLING variants) | Vercel Postgres |
-| `GOOGLE_SHEET_ID` | `1q_OYmnZsW_wMEqlGh3dYJFb0OFzKdB_XUJwfexvhGiY` |
+| `GOOGLE_SHEET_ID` | `1f--c_bNEofTc3-Qjjt4stqu5blxPHvgUTlHppqBrOfc` |
 | `GITHUB_PAT` | GitHub token (added 15 Mar) — currently missing `workflow` scope |
 
 ---
@@ -220,7 +220,7 @@ Campaign send → /api/send-campaign → queues in DB → triggers GitHub Action
 | Zoha WhatsApp API Key | `ZOHA_API_KEY_REDACTED_see_Tasklet_agent` |
 | Zoha Phone | `971501234567` |
 | WhatsApp API Endpoint | `https://wasenderapi.com/api/send-message` |
-| Google Sheet ID | `1q_OYmnZsW_wMEqlGh3dYJFb0OFzKdB_XUJwfexvhGiY` |
+| Google Sheet ID | `1f--c_bNEofTc3-Qjjt4stqu5blxPHvgUTlHppqBrOfc` |
 
 ---
 
