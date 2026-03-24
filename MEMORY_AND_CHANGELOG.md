@@ -1,15 +1,15 @@
 # WASENDER MASTER MEMORY & CHANGELOG
 
-**LAST UPDATED:** 17 Mar 2026, GMT+4
-**PROJECT STATUS:** GitHub Actions workflow created + campaign UI crash fixed + queued status display fixed
-**LATEST LIVE COMMIT:** `2bc9a32` — GitHub Actions workflow + queued UI fix
-**BRANCH:** `claude/review-memory-lock-docs-GGh8m` (pending merge to main)
+**LAST UPDATED:** 24 Mar 2026, GMT+4
+**PROJECT STATUS:** All 6 features implemented + feedback sync loop complete + campaigns working
+**LATEST LIVE COMMIT:** `cf229e4` — auto-update feedback columns after campaign sends
+**BRANCH:** `claude/review-memory-lock-docs-GGh8m` (pending merge to main → Vercel deploy)
 **LIVE URL:** https://wasender-pi.vercel.app
 **REPOSITORY:** https://github.com/mumtazbheda/Wasender
 
 ---
 
-## ⚡ QUICK STATUS (As of 17 Mar 2026)
+## ⚡ QUICK STATUS (As of 24 Mar 2026)
 
 | Feature | Status |
 |---|---|
@@ -26,9 +26,17 @@
 | Statistics page (`/statistics`) | ✅ Live |
 | Collapsible sidebar | ✅ Live |
 | MultiSelectDropdown for Campaigns + Contacts | ✅ Live |
+| **WAsender API endpoint fixed** | ✅ Fixed — was wrong URL, now `wasenderapi.com/api/send-message` |
+| **Campaign messages sending correctly** | ✅ Fixed — Bearer auth + `{ to, text }` body |
+| **UX: Duplicate Next Step button at top** | ✅ Added above contacts list |
+| **UX: Account selector for test messages** | ✅ Separate dropdown in Step 2 |
+| **UX: Custom min/max delay range** | ✅ Replaced ±20% checkbox with `delay_min`/`delay_max` |
+| **UX: Template duplicate + create new buttons** | ✅ Added to Step 2 |
+| **Google Sheet feedback sync after campaign** | ✅ Auto-writes "Message Sent - DD Mon YYYY" to Sheet |
+| **DB cache feedback sync after campaign** | ✅ Updates `sheets_data_cache` in Postgres |
 
 ### 🔴 PENDING ACTIONS
-1. **Merge PR** from branch `claude/review-memory-lock-docs-GGh8m` → `main` to deploy fixes
+1. **Merge PR** from branch `claude/review-memory-lock-docs-GGh8m` → `main` on GitHub to deploy all changes to Vercel
 2. **Add `GITHUB_PAT` secret** to GitHub repo (Settings → Secrets → Actions → New secret) with a Personal Access Token that has `workflow` scope — this allows the GitHub Actions workflow to be triggered when a campaign is started
 
 ---
@@ -72,10 +80,10 @@
 | `message_templates` | Reusable message templates with variables |
 
 ### WhatsApp API
-- **Endpoint:** `https://wasender.websmartmedia.tech/send-text`
-- **Zoha's API Key:** `ZOHA_API_KEY_REDACTED_see_Tasklet_agent`
-- **Zoha's Phone (sender):** `971501234567`
-- **Format:** POST with JSON `{ phone, message, apiKey }`
+- **Endpoint:** `https://wasenderapi.com/api/send-message` ← CORRECT (old was wrong: `wasender.websmartmedia.tech` doesn't exist)
+- **Auth:** `Authorization: Bearer {api_key}` header (NOT body param)
+- **Format:** POST with JSON `{ to: "+971XXXXXXXXX", text: "message" }`
+- **Success check:** `res.ok && data.success !== false`
 
 ### Google Sheets
 - **Sheet ID:** `1q_OYmnZsW_wMEqlGh3dYJFb0OFzKdB_XUJwfexvhGiY`
@@ -155,7 +163,8 @@ Campaign send → /api/send-campaign → queues in DB → triggers GitHub Action
 - **Step 1:** Contact selection with list view + checkboxes, ALL filters mirror Contacts page
 - **Step 2:** Template selection + preview + SEND TEST MESSAGE
   - Variables: {name}, {unit}, {rooms_en}, {project_name_en}, {phone}
-- **Step 3:** Delay config (initial delay, between delay, unit selector, randomize ±20%, schedule option)
+- **Step 3:** Delay config (initial delay, **min delay + max delay range**, unit selector, schedule option)
+  - `delay_min` and `delay_between` (as max) stored in `campaign_runs` DB
   - Campaign naming REQUIRED before sending
 - **Step 4:** Review & Send — account selector, message preview, deduplication stats, send
 - **Rerun Dialog (NEW):** When clicking Re-run, asks:
@@ -210,7 +219,7 @@ Campaign send → /api/send-campaign → queues in DB → triggers GitHub Action
 | Vercel Token | `vcp_REDACTED_see_Tasklet_agent` |
 | Zoha WhatsApp API Key | `ZOHA_API_KEY_REDACTED_see_Tasklet_agent` |
 | Zoha Phone | `971501234567` |
-| WhatsApp API Endpoint | `https://wasender.websmartmedia.tech/send-text` |
+| WhatsApp API Endpoint | `https://wasenderapi.com/api/send-message` |
 | Google Sheet ID | `1q_OYmnZsW_wMEqlGh3dYJFb0OFzKdB_XUJwfexvhGiY` |
 
 ---
@@ -238,6 +247,10 @@ Campaign send → /api/send-campaign → queues in DB → triggers GitHub Action
 19. **React Rules of Hooks: NO hooks after conditional early returns** — Any `useEffect` or `useState` placed AFTER an `if (step === X) { return (...) }` block will crash when the condition flips because React calls a different number of hooks per render. ALL hooks must live at the TOP of the component before any conditional returns
 20. **Queued messages ≠ failed messages in UI** — `status = 'queued'` should display as ⏳ gray pending; `status = 'failed'` should display as ❌ red. Treating both as red misleads users into thinking all messages failed when they are actually just waiting
 21. **GitHub Actions workflow file must exist before calling dispatch API** — Without `.github/workflows/process-campaign.yml` committed to the repo, calling the GitHub REST API to dispatch the workflow silently does nothing (or returns 404). Campaigns get queued in DB but are never processed. The file must be committed to the target ref (`main`) before the dispatch call
+22. **WAsender API URL is `wasenderapi.com/api/send-message`** — NOT `wasender.websmartmedia.tech` (that domain doesn't exist → every message fails silently with "fetch failed"). Auth is `Authorization: Bearer {key}` header. Body is `{ to, text }`.
+23. **`data.success !== false` is required** — WAsender may return `res.ok = true` but `data.success = false` for logical errors (bad phone, etc.). Always check both `res.ok` AND `data.success !== false`.
+24. **Merge conflict resolution can silently remove logic** — After a `git merge`, critical checks like `data.success !== false` may be dropped if both branches modified the same file. Always re-read key files after resolving conflicts.
+25. **`delay_min` DB column requires migration** — Added as `ALTER TABLE campaign_runs ADD COLUMN IF NOT EXISTS delay_min INTEGER DEFAULT 5` in `db.ts`. Without this, rerun-campaign crashes with "column does not exist".
 
 ---
 
@@ -508,9 +521,81 @@ User rejected commit `ca57ec6` (browser-driven campaign queue) for two reasons:
 
 ---
 
+### Session 8: WAsender API Fix + 4 UX Features + Feedback Sync Loop (24 Mar 2026)
+
+#### Root Cause: ALL campaign messages failing with "fetch failed"
+**Symptom:** Every campaign message showed as failed immediately. Test messages also failing.
+**Root cause:** Wrong WAsender API URL — `wasender.websmartmedia.tech` does not exist (not a real domain). Correct URL is `wasenderapi.com/api/send-message`. Also needed Bearer header auth, not body param apiKey.
+
+**Fix:** Commits `9ba0e22` + `a9c1bb0`
+- **Files:** `src/app/api/process-campaign/route.ts`, `src/app/api/send-test-message/route.ts`
+- Changed URL to `https://wasenderapi.com/api/send-message`
+- Changed auth to `Authorization: Bearer {api_key}` header
+- Changed body from `{ phone, message, apiKey }` to `{ to, text }`
+- Restored `data.success !== false` check (lost during merge conflict resolution)
+- Added `err.cause` capture for better error diagnostics
+
+---
+
+#### Merge Conflict Fix
+**Commit `e4baad4`** — Resolved merge conflicts in `process-campaign/route.ts` and `campaigns/page.tsx` that were blocking deployment.
+
+---
+
+#### UX Feature 1: Duplicate "Next Step" button at top
+- Added a second "Next Step →" button above the contacts list in Step 1 of campaigns
+- Shows only when contacts are selected (same condition as bottom button)
+- Saves scrolling when many contacts are visible
+
+#### UX Feature 2: Account selector for test messages
+- Added separate `testAccountId` dropdown in Step 2 (template selection)
+- Test messages can now use any account, independent of the main campaign account
+- Previously used the same account as the campaign
+
+#### UX Feature 3: Custom min/max delay range
+- Replaced ±20% randomize checkbox with two numeric inputs: **Min Delay** + **Max Delay**
+- Default: 10s min, 45s max
+- `send-campaign` API stores: `delay_min` (converted to seconds) and `delay_between` (max, in seconds)
+- `rerun-campaign` API reads both columns and passes correct range to processing
+- `db.ts` migration: `ALTER TABLE campaign_runs ADD COLUMN IF NOT EXISTS delay_min INTEGER DEFAULT 5`
+- Fixed all references in `calculateEstimatedDuration()`, campaign summary panel, and Step 4 review
+
+#### UX Feature 4: Template duplicate + create new buttons
+- Added **⧉ Duplicate** button on each template in Step 2 — creates a copy with "(Copy)" suffix
+- Added **+ Create New Template** link → opens `/templates` in new tab
+- `loadTemplates` extracted as reusable function (used by both load + duplicate)
+
+---
+
+#### Feature: Google Sheet Feedback Sync Loop (Full Auto-Update After Campaign)
+**Commit `cf229e4`**
+
+**The problem:** After sending campaigns, the Google Sheet feedback columns were never updated automatically. Users had to manually write "Message Sent" in the Sheet.
+
+**Solution:** Added `updateFeedbackAfterCampaign(campaignId)` helper in `campaigns/page.tsx`:
+1. Fetches all sent messages with `row_index` and `owner_num` from `/api/campaign-detail/{campaignId}`
+2. For each sent contact: PATCHes `sheets_data_cache` in Postgres
+   - Account "ahmed" → updates `ahmed_feedback_{ownerNum}` = `"Message Sent - DD Mon YYYY"`
+   - Account "zoha"/"soha" → updates `zoha_feedback_{ownerNum}` = `"Message Sent - DD Mon YYYY"`
+3. Calls `/api/sheet-update-direct` with `action: 'update-feedback'` to write back to actual Google Sheet
+
+**Sync cycle now complete:**
+```
+Load Google Sheet → DB cache → run campaign → auto-update DB feedback + Google Sheet feedback → reload Sheet picks up changes cleanly
+```
+
+**Files changed:**
+- `src/app/campaigns/page.tsx` — added `updateFeedbackAfterCampaign()`, wired into `runCampaignInBrowser` (on done) and `runBrowserProcessing` (after complete)
+- `src/app/campaign-history/page.tsx` — added inline feedback update in `runBrowserProcessing` after campaign completes
+- `src/lib/db.ts` — added `delay_min` column migration
+- `src/app/api/send-campaign/route.ts` — replaced `delayBetween/randomizeDelay` with `delayMin/delayMax`
+- `src/app/api/rerun-campaign/route.ts` — updated delay calculation to use `delay_min` + `delay_between`
+
+---
+
 ## ⏭️ FUTURE WORK (Not yet implemented)
 
-1. **Merge branch + add GITHUB_PAT secret** — Branch `claude/review-memory-lock-docs-GGh8m` must be merged to `main`, then add `GITHUB_PAT` as a GitHub repo secret with `workflow` scope so campaigns can be triggered
+1. **Merge branch + add GITHUB_PAT secret** — Branch `claude/review-memory-lock-docs-GGh8m` must be merged to `main` on GitHub (creates PR, merge it), then add `GITHUB_PAT` as a GitHub repo secret with `workflow` scope so campaigns can be triggered. **All features in this branch are built and tested — this is the only remaining step to go live.**
 2. **UAE Number Auto-Normalization to Google Sheet** — `isUAEPhone()` detects UAE numbers but doesn't yet write normalized numbers back to Sheet
 3. **Edit modal section reorganization** — View modal has 9 sections; edit modal (`EDIT_FIELD_GROUPS`) still has original grouping. Should be aligned
 4. **Campaign scheduling (cron)** — Date/time picker exists in Step 3 but actual scheduled execution not implemented server-side
