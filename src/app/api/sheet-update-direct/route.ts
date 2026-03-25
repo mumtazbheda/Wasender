@@ -63,6 +63,22 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: true, message: `Updated ${updated} feedback cells` });
     }
 
+    // Update status (BB) column for a single contact
+    if (body.action === 'update-status') {
+      const { sheetTab, rowIndex, statusValue } = body;
+      if (!sheetTab || rowIndex === undefined || statusValue === undefined) {
+        return NextResponse.json({ success: false, error: "Missing required fields" }, { status: 400 });
+      }
+      const headers = await getSheetHeadersWithAuth(accessToken, sheetTab);
+      const h = headers.map((x: string) => x.toString().trim().toLowerCase());
+      const statusColIndex = h.findIndex((x: string) => x === 'status' || x.includes('status'));
+      if (statusColIndex < 0) {
+        return NextResponse.json({ success: false, error: "Status column not found in sheet headers" }, { status: 400 });
+      }
+      await updateSheetCell(accessToken, sheetTab, rowIndex, statusColIndex, statusValue);
+      return NextResponse.json({ success: true, message: "Status updated" });
+    }
+
     return NextResponse.json({ success: false, error: "Invalid request" }, { status: 400 });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown error";
