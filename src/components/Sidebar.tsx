@@ -20,6 +20,7 @@ const Sidebar = () => {
     { name: "Accounts", path: "/accounts", icon: "📱" },
     { name: "Templates", path: "/templates", icon: "📝" },
     { name: "Messages", path: "/messages", icon: "💬" },
+    { name: "Replies Inbox", path: "/inbox", icon: "📥" },
   ];
 
   return (

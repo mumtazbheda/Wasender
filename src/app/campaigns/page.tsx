@@ -155,6 +155,9 @@ export default function CampaignsPage() {
   const [rerunModal, setRerunModal] = useState<{ campaign: any } | null>(null);
   const [browserProcessing, setBrowserProcessing] = useState<{ campaignId: number; sent: number; failed: number; queued: number; lastError?: string } | null>(null);
 
+  // Filter repeat warning
+  const [filterWarning, setFilterWarning] = useState<{ campaignName: string; campaignId: number } | null>(null);
+
   // Server-side DB cache state
   const [savedSheets, setSavedSheets] = useState<{ sheet_name: string; contact_count: number; synced_at: string }[]>([]);
   const [usingServerCache, setUsingServerCache] = useState(false);
@@ -730,6 +733,34 @@ export default function CampaignsPage() {
     if (histData.campaigns) setCampaignHistory(histData.campaigns);
   };
 
+  // Normalize filters for comparison (sort keys + array values)
+  const normalizeFilters = (f: Record<string, any>) => {
+    const result: Record<string, any> = {};
+    for (const key of Object.keys(f).sort()) {
+      const val = f[key];
+      if (Array.isArray(val) && val.length > 0) result[key] = [...val].sort();
+      else if (typeof val === 'string' && val) result[key] = val;
+    }
+    return JSON.stringify(result);
+  };
+
+  // Check if current filters were already used in a past campaign, warn if so
+  const checkFiltersAndAdvance = () => {
+    if (selectedContacts.size === 0) return;
+    const currentNorm = normalizeFilters(filters as Record<string, any>);
+    if (currentNorm === '{}') { setStep(2); return; }
+    for (const campaign of campaignHistory) {
+      try {
+        const past = JSON.parse(campaign.filters_used || '{}');
+        if (normalizeFilters(past) === currentNorm) {
+          setFilterWarning({ campaignName: campaign.name || 'Unnamed Campaign', campaignId: campaign.id });
+          return;
+        }
+      } catch {}
+    }
+    setStep(2);
+  };
+
   // Converts delay to milliseconds
   const convertDelayToMs = (amount: number, unit: string): number => {
     switch (unit) {
@@ -1034,7 +1065,7 @@ export default function CampaignsPage() {
           {filteredContacts.length > 0 && selectedContacts.size > 0 && (
             <div className="flex gap-4 mb-2">
               <button
-                onClick={() => setStep(2)}
+                onClick={checkFiltersAndAdvance}
                 className="flex-1 px-6 py-3 bg-green-600 hover:bg-green-700 text-white rounded-lg transition font-bold"
               >
                 Next: Select Template ({selectedContacts.size} selected) ↓
@@ -1109,12 +1140,47 @@ export default function CampaignsPage() {
           {contacts.length > 0 && (
             <div className="flex gap-4">
               <button
-                onClick={() => setStep(2)}
+                onClick={checkFiltersAndAdvance}
                 disabled={selectedContacts.size === 0}
                 className="flex-1 px-6 py-3 bg-green-600 hover:bg-green-700 disabled:bg-gray-400 text-white rounded-lg transition font-bold"
               >
                 Next: Select Template ({selectedContacts.size} selected)
               </button>
+            </div>
+          )}
+
+          {/* Filter Repeat Warning Modal */}
+          {filterWarning && (
+            <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+              <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6">
+                <div className="flex items-center gap-3 mb-4">
+                  <span className="text-3xl">⚠️</span>
+                  <h2 className="text-xl font-bold text-gray-900">Same Filters Already Used</h2>
+                </div>
+                <p className="text-gray-700 mb-2">
+                  You have already run a campaign using these exact filters:
+                </p>
+                <div className="bg-yellow-50 border border-yellow-200 rounded-lg px-4 py-3 mb-4">
+                  <p className="font-bold text-yellow-900">📢 {filterWarning.campaignName}</p>
+                </div>
+                <p className="text-gray-600 text-sm mb-6">
+                  Sending again with the same filters may result in duplicate messages to the same contacts. Would you like to continue anyway?
+                </p>
+                <div className="flex flex-col gap-3">
+                  <button
+                    onClick={() => { setFilterWarning(null); setStep(2); }}
+                    className="w-full py-3 bg-orange-500 hover:bg-orange-600 text-white rounded-xl font-bold transition"
+                  >
+                    Yes, Continue Anyway
+                  </button>
+                  <button
+                    onClick={() => setFilterWarning(null)}
+                    className="w-full py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-xl font-semibold transition"
+                  >
+                    Cancel — Go Back &amp; Change Filters
+                  </button>
+                </div>
+              </div>
             </div>
           )}
 
