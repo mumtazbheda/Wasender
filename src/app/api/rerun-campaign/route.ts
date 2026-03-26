@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { sql } from '@/lib/db';
 
-async function triggerGithubWorkflow(campaignId: number, delayMin: number, delayMax: number) {
+async function triggerGithubWorkflow(campaignId: number, delayMin: number, delayMax: number): Promise<{ ok: boolean; error?: string }> {
   const githubPat = process.env.GITHUB_PAT;
-  if (!githubPat) return false;
+  if (!githubPat) return { ok: false, error: 'GITHUB_PAT env var not set' };
   try {
     const res = await fetch(
       'https://api.github.com/repos/mumtazbheda/Wasender/actions/workflows/process-campaign.yml/dispatches',
@@ -25,9 +25,11 @@ async function triggerGithubWorkflow(campaignId: number, delayMin: number, delay
         }),
       }
     );
-    return res.ok || res.status === 204;
-  } catch {
-    return false;
+    if (res.ok || res.status === 204) return { ok: true };
+    const errText = await res.text();
+    return { ok: false, error: `GitHub returned ${res.status}: ${errText}` };
+  } catch (e: any) {
+    return { ok: false, error: e.message };
   }
 }
 
@@ -66,19 +68,18 @@ export async function POST(request: NextRequest) {
       WHERE id = ${cid}
     `;
 
-    // Calculate delay from stored min/max
-    const unit = campaign.delay_unit || 'seconds';
-    const toSeconds = (v: number) => unit === 'minutes' ? v * 60 : unit === 'hours' ? v * 3600 : v;
-    const delayMax = Math.max(1, toSeconds(parseInt(String(campaign.delay_between || 45))));
-    const delayMin = Math.max(1, Math.min(toSeconds(parseInt(String(campaign.delay_min || campaign.delay_between || 10))), delayMax));
+    // delay_min and delay_between are already stored in seconds (converted at campaign creation)
+    const delayMin = Math.max(1, parseInt(String(campaign.delay_min || 10)));
+    const delayMax = Math.max(delayMin, parseInt(String(campaign.delay_between || 45)));
 
-    const workflowTriggered = await triggerGithubWorkflow(cid, delayMin, delayMax);
+    const { ok: workflowTriggered, error: workflowError } = await triggerGithubWorkflow(cid, delayMin, delayMax);
 
     return NextResponse.json({
       message: workflowTriggered
         ? `Campaign restarted (${mode === 'fresh' ? 'from beginning' : 'resuming from where left off'})`
-        : 'Campaign reset but background job trigger failed',
+        : `Campaign reset but background job trigger failed: ${workflowError}`,
       workflowTriggered,
+      workflowError: workflowError || null,
     });
   } catch (error: any) {
     return NextResponse.json({ message: 'Failed: ' + error.message }, { status: 500 });

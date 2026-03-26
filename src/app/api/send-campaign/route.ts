@@ -55,12 +55,9 @@ function deduplicatePhones(contacts: any[]): { entries: PhoneEntry[]; totalPhone
   return { entries, totalPhones, duplicates: totalPhones - entries.length };
 }
 
-async function triggerGithubWorkflow(campaignId: number, delayMin: number, delayMax: number) {
+async function triggerGithubWorkflow(campaignId: number, delayMin: number, delayMax: number): Promise<{ ok: boolean; error?: string }> {
   const githubPat = process.env.GITHUB_PAT;
-  if (!githubPat) {
-    console.error('GITHUB_PAT not configured');
-    return false;
-  }
+  if (!githubPat) return { ok: false, error: 'GITHUB_PAT env var not set in Vercel' };
 
   try {
     const res = await fetch(
@@ -83,17 +80,11 @@ async function triggerGithubWorkflow(campaignId: number, delayMin: number, delay
         }),
       }
     );
-    if (res.ok || res.status === 204) {
-      console.log(`GitHub workflow dispatched for campaign ${campaignId}`);
-      return true;
-    } else {
-      const err = await res.text();
-      console.error('GitHub workflow dispatch failed:', err);
-      return false;
-    }
+    if (res.ok || res.status === 204) return { ok: true };
+    const errText = await res.text();
+    return { ok: false, error: `GitHub returned ${res.status}: ${errText}` };
   } catch (err: any) {
-    console.error('GitHub workflow dispatch error:', err.message);
-    return false;
+    return { ok: false, error: err.message };
   }
 }
 
@@ -145,17 +136,18 @@ export async function POST(request: NextRequest) {
     }
 
     // Trigger GitHub Actions workflow to process in background
-    const workflowTriggered = await triggerGithubWorkflow(campaignId, delayMin, delayMax);
+    const { ok: workflowTriggered, error: workflowError } = await triggerGithubWorkflow(campaignId, delayMin, delayMax);
 
     return NextResponse.json({
       message: workflowTriggered
         ? 'Campaign queued and background job started'
-        : 'Campaign queued (background job trigger failed - use Resume button)',
+        : `Campaign queued (background job trigger failed: ${workflowError})`,
       campaignId,
       totalContacts: contacts.length,
       uniquePhones: uniquePhones.length,
       duplicatesRemoved: duplicates,
       workflowTriggered,
+      workflowError: workflowError || null,
     }, { status: 200 });
   } catch (error: any) {
     return NextResponse.json({ message: 'Failed: ' + error.message }, { status: 500 });

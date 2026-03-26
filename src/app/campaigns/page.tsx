@@ -682,7 +682,7 @@ export default function CampaignsPage() {
         if (data.workflowTriggered) {
           setSendStatus({ type: 'success', message: `✅ Campaign "${campaignName}" started! ${data.uniquePhones} messages queued — running in the background. You can close this tab.` });
         } else {
-          setSendStatus({ type: 'success', message: `✅ Campaign "${campaignName}" queued. Background trigger is unavailable, so this tab will process messages now.` });
+          setSendStatus({ type: 'error', message: `⚠️ GitHub Actions failed (${data.workflowError || 'unknown'}). Processing in this tab instead — keep it open.` });
           const initialDelayMs = Math.max(0, convertDelayToMs(delayBefore, delayUnit));
           setTimeout(() => {
             void runCampaignInBrowser(data.campaignId, minDelay, maxDelay);
