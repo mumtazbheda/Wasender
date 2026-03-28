@@ -214,6 +214,7 @@ function CampaignHistoryContent() {
         setRerunModal(null);
         // If GitHub Actions not triggered, process in browser automatically
         if (!data.workflowTriggered) {
+          setRerunStatus({ type: 'error', message: `⚠️ GitHub Actions failed: ${data.workflowError || 'unknown reason'}. Processing in browser — keep this tab open.` });
           runBrowserProcessing(campaignId);
         }
       } else {
