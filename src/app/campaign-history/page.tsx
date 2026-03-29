@@ -52,8 +52,10 @@ function CampaignHistoryContent() {
   const [rerunModal, setRerunModal] = useState<Campaign | null>(null);
   const [rerunLoading, setRerunLoading] = useState(false);
   const [rerunStatus, setRerunStatus] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
-  const [browserProcessing, setBrowserProcessing] = useState<{ campaignId: number; sent: number; failed: number; queued: number; lastError?: string } | null>(null);
+  const [rerunDelayMin, setRerunDelayMin] = useState<string>('30');
+  const [rerunDelayMax, setRerunDelayMax] = useState<string>('60');
   const [stoppingId, setStoppingId] = useState<number | null>(null);
+  const browserProcessing = null; // cron job handles processing — no browser fallback needed
 
   // Load all campaigns
   useEffect(() => {
@@ -125,6 +127,11 @@ function CampaignHistoryContent() {
 
   const handleRerun = (campaign: Campaign) => {
     setRerunStatus(null);
+    // Pre-fill delay from stored values (already in seconds), default to 30/60 if missing
+    const storedMin = parseInt(String(campaign.delay_before || 30));
+    const storedMax = parseInt(String(campaign.delay_between || 60));
+    setRerunDelayMin(String(Math.max(5, isNaN(storedMin) ? 30 : storedMin)));
+    setRerunDelayMax(String(Math.max(5, isNaN(storedMax) ? 60 : storedMax)));
     setRerunModal(campaign);
   };
 
@@ -151,68 +158,6 @@ function CampaignHistoryContent() {
     setStoppingId(null);
   };
 
-  const runBrowserProcessing = async (campaignId: number) => {
-    setBrowserProcessing({ campaignId, sent: 0, failed: 0, queued: 0 });
-    let isComplete = false;
-    while (!isComplete) {
-      try {
-        const res = await fetch('/api/process-campaign', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ campaignId }),
-        });
-        const data = await res.json();
-        isComplete = data.isComplete;
-        setBrowserProcessing({ campaignId, sent: data.sentTotal || 0, failed: data.failedTotal || 0, queued: data.queuedRemaining || 0, lastError: data.error || undefined });
-        if (!isComplete) {
-          await new Promise(r => setTimeout(r, 3000));
-        }
-      } catch {
-        await new Promise(r => setTimeout(r, 5000));
-      }
-    }
-    setBrowserProcessing(null);
-    // Update feedback in DB cache + Google Sheet
-    try {
-      const detailRes = await fetch(`/api/campaign-detail/${campaignId}`);
-      if (detailRes.ok) {
-        const detail = await detailRes.json();
-        const campaign = detail.campaign;
-        const sentMessages: any[] = (detail.messages || []).filter((m: any) => m.status === 'sent' && m.row_index != null);
-        if (sentMessages.length && campaign?.sheet_tab && campaign?.account_name) {
-          const timestamp = new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
-          const feedbackValue = `Message Sent - ${timestamp}`;
-          const acct = (campaign.account_name || '').toLowerCase();
-          for (const msg of sentMessages) {
-            const ownerNum = msg.owner_num || 1;
-            let feedbackKey = '';
-            if (acct.includes('ahmed')) feedbackKey = `ahmed_feedback_${ownerNum}`;
-            else if (acct.includes('zoha') || acct.includes('soha')) feedbackKey = `zoha_feedback_${ownerNum}`;
-            if (!feedbackKey) continue;
-            await fetch('/api/contacts-cache', {
-              method: 'PATCH',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ sheetName: campaign.sheet_tab, rowIndex: msg.row_index, updates: { [feedbackKey]: feedbackValue } }),
-            });
-          }
-          await fetch('/api/sheet-update-direct', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              action: 'update-feedback',
-              sheetTab: campaign.sheet_tab,
-              accountName: campaign.account_name,
-              updates: sentMessages.map((m: any) => ({ rowIndex: m.row_index, ownerNum: m.owner_num || 1 })),
-            }),
-          });
-        }
-      }
-    } catch (err) { console.error('Feedback update failed:', err); }
-    // Refresh campaign list after done
-    const h = await fetch('/api/send-campaign');
-    const hd = await h.json();
-    if (hd.campaigns) setCampaigns(hd.campaigns);
-  };
 
   const executeRerun = async (mode: 'resume' | 'fresh') => {
     if (!rerunModal) return;
@@ -222,26 +167,24 @@ function CampaignHistoryContent() {
       const res = await fetch('/api/rerun-campaign', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ campaignId: rerunModal.id, mode }),
+        body: JSON.stringify({
+          campaignId: rerunModal.id,
+          mode,
+          delayMin: parseInt(rerunDelayMin) || 30,
+          delayMax: parseInt(rerunDelayMax) || 60,
+        }),
       });
       const data = await res.json();
       if (res.ok) {
         const campaignId = rerunModal.id;
+        setRerunModal(null);
         setRerunStatus({ type: 'success', message: '✅ ' + data.message });
-        // Refresh campaigns list
         const h = await fetch('/api/send-campaign');
         const hd = await h.json();
         if (hd.campaigns) setCampaigns(hd.campaigns);
-        // Also refresh detail if open
         if (selectedCampaign && selectedCampaign.id === campaignId) {
           const updated = (hd.campaigns || []).find((c: Campaign) => c.id === campaignId);
           if (updated) setSelectedCampaign(updated);
-        }
-        setRerunModal(null);
-        // If GitHub Actions not triggered, process in browser automatically
-        if (!data.workflowTriggered) {
-          setRerunStatus({ type: 'error', message: `⚠️ GitHub Actions failed: ${data.workflowError || 'unknown reason'}. Processing in browser — keep this tab open.` });
-          runBrowserProcessing(campaignId);
         }
       } else {
         setRerunStatus({ type: 'error', message: '❌ ' + (data.message || 'Failed') });
@@ -257,23 +200,7 @@ function CampaignHistoryContent() {
     return m.status === messageFilter;
   });
 
-  const processingBanner = browserProcessing && (
-    <div className="fixed bottom-4 right-4 z-50 bg-blue-600 text-white px-5 py-3 rounded-xl shadow-2xl text-sm font-medium max-w-sm">
-      <div className="flex items-center gap-2 mb-1">
-        <span className="animate-spin">⏳</span>
-        <span className="font-bold">Sending messages...</span>
-      </div>
-      <div className="text-xs opacity-90">
-        ✅ Sent: {browserProcessing.sent} &nbsp; ❌ Failed: {browserProcessing.failed} &nbsp; Remaining: {browserProcessing.queued}
-      </div>
-      {browserProcessing.lastError && (
-        <div className="text-xs mt-2 bg-red-500 bg-opacity-80 rounded px-2 py-1">
-          Last error: {browserProcessing.lastError}
-        </div>
-      )}
-      <div className="text-xs opacity-75 mt-1">Keep this tab open until complete</div>
-    </div>
-  );
+  const processingBanner = null; // cron job handles processing — no browser banner needed
 
   // Campaign Detail View
   if (selectedCampaign) {
@@ -486,7 +413,32 @@ function CampaignHistoryContent() {
                 {rerunStatus.message}
               </div>
             )}
-            <div className="flex flex-col gap-3">
+            {/* Delay inputs */}
+            <div className="mb-5 bg-gray-50 rounded-xl p-4">
+              <p className="text-sm font-bold text-gray-700 mb-3">⏱ Delay Between Messages (seconds)</p>
+              <div className="flex gap-3">
+                <div className="flex-1">
+                  <label className="text-xs text-gray-500 mb-1 block">Min delay</label>
+                  <input
+                    type="number" min="5" max="300"
+                    value={rerunDelayMin}
+                    onChange={e => setRerunDelayMin(e.target.value)}
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm font-bold text-center focus:outline-none focus:ring-2 focus:ring-blue-400"
+                  />
+                </div>
+                <div className="flex-1">
+                  <label className="text-xs text-gray-500 mb-1 block">Max delay</label>
+                  <input
+                    type="number" min="5" max="300"
+                    value={rerunDelayMax}
+                    onChange={e => setRerunDelayMax(e.target.value)}
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm font-bold text-center focus:outline-none focus:ring-2 focus:ring-blue-400"
+                  />
+                </div>
+              </div>
+              <p className="text-xs text-gray-400 mt-2">WaSender requires at least 5s between messages</p>
+            </div>
+          <div className="flex flex-col gap-3">
               <button disabled={rerunLoading} onClick={() => executeRerun('resume')} className="w-full py-3 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-300 text-white rounded-xl font-bold text-left px-4 transition">
                 <div className="font-bold">▶ Resume from where I left off</div>
                 <div className="text-sm font-normal opacity-90">Skip already-sent numbers, only send to remaining ones</div>
