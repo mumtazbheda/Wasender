@@ -9,7 +9,6 @@
     "lint": "eslint"
   },
   "dependencies": {
-    "@anthropic-ai/sdk": "^0.80.0",
     "@vercel/postgres": "^0.10.0",
     "google-auth-library": "^10.6.1",
     "googleapis": "^171.4.0",
