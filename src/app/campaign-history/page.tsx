@@ -53,6 +53,7 @@ function CampaignHistoryContent() {
   const [rerunLoading, setRerunLoading] = useState(false);
   const [rerunStatus, setRerunStatus] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
   const [browserProcessing, setBrowserProcessing] = useState<{ campaignId: number; sent: number; failed: number; queued: number; lastError?: string } | null>(null);
+  const [stoppingId, setStoppingId] = useState<number | null>(null);
 
   // Load all campaigns
   useEffect(() => {
@@ -105,6 +106,7 @@ function CampaignHistoryContent() {
       in_progress: 'bg-blue-100 text-blue-800 border-blue-200',
       failed: 'bg-red-100 text-red-800 border-red-200',
       pending: 'bg-gray-100 text-gray-800 border-gray-200',
+      stopped: 'bg-orange-100 text-orange-800 border-orange-200',
     };
     return styles[status] || styles.pending;
   };
@@ -116,6 +118,7 @@ function CampaignHistoryContent() {
       in_progress: '⏳ In Progress',
       failed: '❌ Failed',
       pending: '⏳ Pending',
+      stopped: '⏹ Stopped',
     };
     return labels[status] || status;
   };
@@ -123,6 +126,29 @@ function CampaignHistoryContent() {
   const handleRerun = (campaign: Campaign) => {
     setRerunStatus(null);
     setRerunModal(campaign);
+  };
+
+  const stopCampaign = async (e: React.MouseEvent, campaignId: number) => {
+    e.stopPropagation();
+    if (!confirm('Stop this campaign? You can resume it later using Re-run → Resume.')) return;
+    setStoppingId(campaignId);
+    try {
+      const res = await fetch('/api/stop-campaign', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ campaignId }),
+      });
+      if (res.ok) {
+        const h = await fetch('/api/send-campaign');
+        const hd = await h.json();
+        if (hd.campaigns) setCampaigns(hd.campaigns);
+        if (selectedCampaign?.id === campaignId) {
+          const updated = (hd.campaigns || []).find((c: Campaign) => c.id === campaignId);
+          if (updated) setSelectedCampaign(updated);
+        }
+      }
+    } catch {}
+    setStoppingId(null);
   };
 
   const runBrowserProcessing = async (campaignId: number) => {
@@ -279,6 +305,15 @@ function CampaignHistoryContent() {
                 <span className={`px-4 py-2 rounded-full text-sm font-bold border ${getStatusBadge(selectedCampaign.status)}`}>
                   {getStatusLabel(selectedCampaign.status)}
                 </span>
+                {selectedCampaign.status === 'in_progress' && (
+                  <button
+                    onClick={(e) => stopCampaign(e, selectedCampaign.id)}
+                    disabled={stoppingId === selectedCampaign.id}
+                    className="px-4 py-2 bg-red-500 hover:bg-red-600 disabled:bg-red-300 text-white rounded-lg text-sm font-bold"
+                  >
+                    {stoppingId === selectedCampaign.id ? 'Stopping...' : '⏹ Stop'}
+                  </button>
+                )}
                 <button
                   onClick={() => handleRerun(selectedCampaign)}
                   className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-bold"
@@ -549,6 +584,15 @@ function CampaignHistoryContent() {
                 )}
 
                 <div className="flex gap-2 mt-3">
+                  {campaign.status === 'in_progress' && (
+                    <button
+                      onClick={(e) => stopCampaign(e, campaign.id)}
+                      disabled={stoppingId === campaign.id}
+                      className="px-3 py-1.5 bg-red-500 hover:bg-red-600 disabled:bg-red-300 text-white rounded-lg text-xs font-bold"
+                    >
+                      {stoppingId === campaign.id ? 'Stopping...' : '⏹ Stop'}
+                    </button>
+                  )}
                   <button
                     onClick={(e) => { e.stopPropagation(); handleRerun(campaign); }}
                     className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-bold"
