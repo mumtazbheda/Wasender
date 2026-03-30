@@ -577,6 +577,32 @@ function CampaignHistoryContent() {
             </div>
           )}
 
+          {/* Delay inputs */}
+          <div className="mb-5 bg-gray-50 rounded-xl p-4">
+            <p className="text-sm font-bold text-gray-700 mb-3">⏱ Delay Between Messages (seconds)</p>
+            <div className="flex gap-3">
+              <div className="flex-1">
+                <label className="text-xs text-gray-500 mb-1 block">Min delay</label>
+                <input
+                  type="number" min="5" max="300"
+                  value={rerunDelayMin}
+                  onChange={e => setRerunDelayMin(e.target.value)}
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm font-bold text-center focus:outline-none focus:ring-2 focus:ring-blue-400"
+                />
+              </div>
+              <div className="flex-1">
+                <label className="text-xs text-gray-500 mb-1 block">Max delay</label>
+                <input
+                  type="number" min="5" max="300"
+                  value={rerunDelayMax}
+                  onChange={e => setRerunDelayMax(e.target.value)}
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm font-bold text-center focus:outline-none focus:ring-2 focus:ring-blue-400"
+                />
+              </div>
+            </div>
+            <p className="text-xs text-gray-400 mt-2">WaSender requires at least 5s between messages</p>
+          </div>
+
           <div className="flex flex-col gap-3">
             <button
               disabled={rerunLoading}
