@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { sql } from '@/lib/db';
 
+// Vercel Hobby plan: 10s function limit. Leave 1.5s buffer for overhead.
+const MAX_EXECUTION_MS = 8500;
+
 function isAuthorized(request: NextRequest): boolean {
   const cronSecret = process.env.CRON_SECRET;
   if (!cronSecret) return true;
@@ -38,13 +41,38 @@ async function sendMessage(account: any, phone: string, message: string): Promis
   }
 }
 
+function sleep(ms: number): Promise<void> {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+async function updateCampaignStats(cid: number): Promise<{ sent: number; failed: number; queued: number }> {
+  const stats = await sql`
+    SELECT
+      COUNT(*) FILTER (WHERE status = 'sent') as sent_count,
+      COUNT(*) FILTER (WHERE status = 'failed') as failed_count,
+      COUNT(*) FILTER (WHERE status IN ('queued', 'sending')) as queued_count
+    FROM campaign_messages WHERE campaign_id = ${cid}
+  `;
+  const sent = parseInt(stats.rows[0].sent_count);
+  const failed = parseInt(stats.rows[0].failed_count);
+  const queued = parseInt(stats.rows[0].queued_count);
+  await sql`UPDATE campaign_runs SET sent_count = ${sent}, failed_count = ${failed} WHERE id = ${cid}`;
+  if (queued === 0) {
+    const finalStatus = failed === 0 ? 'completed' : (sent === 0 ? 'failed' : 'partial');
+    await sql`UPDATE campaign_runs SET status = ${finalStatus}, completed_at = NOW() WHERE id = ${cid}`;
+  }
+  return { sent, failed, queued };
+}
+
 export async function GET(request: NextRequest) {
   if (!isAuthorized(request)) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
+  const startTime = Date.now();
+
   try {
-    // Reset any messages stuck in 'sending' for more than 3 minutes (from old browser processing)
+    // Reset any messages stuck in 'sending' for more than 3 minutes
     await sql`
       UPDATE campaign_messages
       SET status = 'queued'
@@ -68,90 +96,81 @@ export async function GET(request: NextRequest) {
 
     let totalProcessed = 0;
 
-    for (const campaign of campaigns.rows) {
-      const cid = campaign.id;
-      // delay_min is stored in seconds; default to 30s if missing/zero
-      const delayMin = Math.max(5, parseInt(String(campaign.delay_min || 30)));
+    // Process campaigns in a round-robin loop until we run out of time
+    // This ensures all campaigns get fair processing even with short delays
+    let anyProgress = true;
+    while (anyProgress) {
+      anyProgress = false;
 
-      // Check when the last message was sent for this campaign
-      const lastSent = await sql`
-        SELECT MAX(sent_at) as last_sent FROM campaign_messages
-        WHERE campaign_id = ${cid} AND status IN ('sent', 'failed')
-      `;
-      const lastSentAt = lastSent.rows[0]?.last_sent;
+      for (const campaign of campaigns.rows) {
+        // Check time budget before each message
+        const elapsed = Date.now() - startTime;
+        if (elapsed >= MAX_EXECUTION_MS) {
+          return NextResponse.json({ processed: totalProcessed, campaigns: campaigns.rows.length, timeUsed: elapsed });
+        }
 
-      // If last message was sent less than delayMin seconds ago, skip this campaign
-      if (lastSentAt) {
-        const secondsSinceLast = (Date.now() - new Date(lastSentAt).getTime()) / 1000;
-        if (secondsSinceLast < delayMin) {
+        const cid = campaign.id;
+        const delayMin = Math.max(5, parseInt(String(campaign.delay_min || 30)));
+        const delayMax = Math.max(delayMin, parseInt(String(campaign.delay_between || delayMin)));
+
+        // Check delay since last sent message
+        const lastSent = await sql`
+          SELECT MAX(sent_at) as last_sent FROM campaign_messages
+          WHERE campaign_id = ${cid} AND status IN ('sent', 'failed')
+        `;
+        const lastSentAt = lastSent.rows[0]?.last_sent;
+
+        if (lastSentAt) {
+          const secondsSinceLast = (Date.now() - new Date(lastSentAt).getTime()) / 1000;
+          if (secondsSinceLast < delayMin) {
+            // Not yet time — check if we can wait within our time budget
+            const waitNeeded = (delayMin - secondsSinceLast) * 1000;
+            const timeRemaining = MAX_EXECUTION_MS - (Date.now() - startTime);
+            if (waitNeeded <= timeRemaining - 2000) {
+              // We have time to wait, then send
+              await sleep(waitNeeded);
+            } else {
+              // Not enough time to wait — skip this campaign for now, next cron call will pick it up
+              continue;
+            }
+          }
+        }
+
+        // Atomically claim the next queued message
+        const nextMsg = await sql`
+          UPDATE campaign_messages
+          SET status = 'sending'
+          WHERE id = (
+            SELECT id FROM campaign_messages
+            WHERE campaign_id = ${cid} AND status = 'queued'
+            ORDER BY id ASC
+            LIMIT 1
+          )
+          RETURNING *
+        `;
+
+        if (nextMsg.rows.length === 0) {
+          // No more queued messages — finalize
+          await updateCampaignStats(cid);
           continue;
         }
-      }
 
-      // Atomically claim the next queued message
-      const nextMsg = await sql`
-        UPDATE campaign_messages
-        SET status = 'sending'
-        WHERE id = (
-          SELECT id FROM campaign_messages
-          WHERE campaign_id = ${cid} AND status = 'queued'
-          ORDER BY id ASC
-          LIMIT 1
-        )
-        RETURNING *
-      `;
+        const msg = nextMsg.rows[0];
+        const result = await sendMessage(campaign, msg.phone, msg.message_text);
 
-      if (nextMsg.rows.length === 0) {
-        // No more queued messages — finalize campaign
-        const stats = await sql`
-          SELECT
-            COUNT(*) FILTER (WHERE status = 'sent') as sent_count,
-            COUNT(*) FILTER (WHERE status = 'failed') as failed_count,
-            COUNT(*) FILTER (WHERE status IN ('queued', 'sending')) as queued_count
-          FROM campaign_messages WHERE campaign_id = ${cid}
-        `;
-        const sCnt = parseInt(stats.rows[0].sent_count);
-        const fCnt = parseInt(stats.rows[0].failed_count);
-        const qCnt = parseInt(stats.rows[0].queued_count);
-        if (qCnt === 0) {
-          const finalStatus = fCnt === 0 ? 'completed' : (sCnt === 0 ? 'failed' : 'partial');
-          await sql`UPDATE campaign_runs SET status = ${finalStatus}, completed_at = NOW(), sent_count = ${sCnt}, failed_count = ${fCnt} WHERE id = ${cid}`;
+        if (result.success) {
+          await sql`UPDATE campaign_messages SET status = 'sent', sent_at = NOW() WHERE id = ${msg.id}`;
+        } else {
+          await sql`UPDATE campaign_messages SET status = 'failed', error_message = ${result.error || 'Unknown'}, sent_at = NOW() WHERE id = ${msg.id}`;
         }
-        continue;
+
+        await updateCampaignStats(cid);
+        totalProcessed++;
+        anyProgress = true;
       }
-
-      const msg = nextMsg.rows[0];
-      const result = await sendMessage(campaign, msg.phone, msg.message_text);
-
-      if (result.success) {
-        await sql`UPDATE campaign_messages SET status = 'sent', sent_at = NOW() WHERE id = ${msg.id}`;
-      } else {
-        await sql`UPDATE campaign_messages SET status = 'failed', error_message = ${result.error || 'Unknown'}, sent_at = NOW() WHERE id = ${msg.id}`;
-      }
-
-      // Update campaign counters
-      const stats = await sql`
-        SELECT
-          COUNT(*) FILTER (WHERE status = 'sent') as sent_count,
-          COUNT(*) FILTER (WHERE status = 'failed') as failed_count,
-          COUNT(*) FILTER (WHERE status IN ('queued', 'sending')) as queued_count
-        FROM campaign_messages WHERE campaign_id = ${cid}
-      `;
-      const sCnt = parseInt(stats.rows[0].sent_count);
-      const fCnt = parseInt(stats.rows[0].failed_count);
-      const qCnt = parseInt(stats.rows[0].queued_count);
-
-      await sql`UPDATE campaign_runs SET sent_count = ${sCnt}, failed_count = ${fCnt} WHERE id = ${cid}`;
-
-      if (qCnt === 0) {
-        const finalStatus = fCnt === 0 ? 'completed' : (sCnt === 0 ? 'failed' : 'partial');
-        await sql`UPDATE campaign_runs SET status = ${finalStatus}, completed_at = NOW() WHERE id = ${cid}`;
-      }
-
-      totalProcessed++;
     }
 
-    return NextResponse.json({ processed: totalProcessed, campaigns: campaigns.rows.length });
+    return NextResponse.json({ processed: totalProcessed, campaigns: campaigns.rows.length, timeUsed: Date.now() - startTime });
   } catch (error: any) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
