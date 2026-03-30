@@ -18,8 +18,10 @@ export async function POST(request: NextRequest) {
     const campaign = campaignResult.rows[0];
 
     if (mode === 'fresh') {
+      // Reset ALL messages including sending/stuck ones
       await sql`UPDATE campaign_messages SET status = 'queued', sent_at = NULL, error_message = NULL WHERE campaign_id = ${cid}`;
     } else {
+      // Resume: re-queue everything that wasn't successfully sent (including stuck 'sending')
       await sql`UPDATE campaign_messages SET status = 'queued', sent_at = NULL, error_message = NULL WHERE campaign_id = ${cid} AND status IN ('failed', 'sending', 'queued')`;
     }
 

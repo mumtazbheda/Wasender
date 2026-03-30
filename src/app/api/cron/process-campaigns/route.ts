@@ -1,20 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { sql } from '@/lib/db';
 
-// Protect this endpoint - Vercel auto-provides CRON_SECRET for scheduled calls
-// Also allow calls from external cron services using x-cron-secret header
 function isAuthorized(request: NextRequest): boolean {
   const cronSecret = process.env.CRON_SECRET;
-  if (!cronSecret) return true; // No secret configured = open (set CRON_SECRET in Vercel)
-
-  // Vercel's built-in cron sends Authorization: Bearer <secret>
+  if (!cronSecret) return true;
   const authHeader = request.headers.get('authorization');
   if (authHeader === `Bearer ${cronSecret}`) return true;
-
-  // External cron services (cron-job.org etc.) can use x-cron-secret header
   const headerSecret = request.headers.get('x-cron-secret');
   if (headerSecret === cronSecret) return true;
-
   return false;
 }
 
@@ -51,6 +44,15 @@ export async function GET(request: NextRequest) {
   }
 
   try {
+    // Reset any messages stuck in 'sending' for more than 3 minutes (from old browser processing)
+    await sql`
+      UPDATE campaign_messages
+      SET status = 'queued'
+      WHERE status = 'sending'
+        AND (sent_at IS NULL OR sent_at < NOW() - INTERVAL '3 minutes')
+        AND created_at < NOW() - INTERVAL '3 minutes'
+    `;
+
     // Find all in_progress campaigns
     const campaigns = await sql`
       SELECT cr.*, wa.api_key, wa.account_type, wa.phone_number_id
@@ -68,7 +70,8 @@ export async function GET(request: NextRequest) {
 
     for (const campaign of campaigns.rows) {
       const cid = campaign.id;
-      const delayMin = parseInt(String(campaign.delay_min || 10)); // already in seconds
+      // delay_min is stored in seconds; default to 30s if missing/zero
+      const delayMin = Math.max(5, parseInt(String(campaign.delay_min || 30)));
 
       // Check when the last message was sent for this campaign
       const lastSent = await sql`
@@ -77,11 +80,11 @@ export async function GET(request: NextRequest) {
       `;
       const lastSentAt = lastSent.rows[0]?.last_sent;
 
-      // If last message was sent less than delay_min seconds ago, skip this campaign
+      // If last message was sent less than delayMin seconds ago, skip this campaign
       if (lastSentAt) {
         const secondsSinceLast = (Date.now() - new Date(lastSentAt).getTime()) / 1000;
         if (secondsSinceLast < delayMin) {
-          continue; // Not yet time to send next message for this campaign
+          continue;
         }
       }
 
