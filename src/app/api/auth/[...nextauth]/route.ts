@@ -1,5 +1,6 @@
 import NextAuth, { type NextAuthOptions } from "next-auth";
 import GoogleProvider from "next-auth/providers/google";
+import { sql } from "@/lib/db";
 
 export const authOptions: NextAuthOptions = {
   providers: [
@@ -22,6 +23,20 @@ export const authOptions: NextAuthOptions = {
         token.accessToken = account.access_token;
         token.refreshToken = account.refresh_token;
         token.expiresAt = account.expires_at;
+        // Persist refresh token to DB so cron can update sheets without a browser session
+        if (account.refresh_token) {
+          try {
+            await sql`
+              INSERT INTO google_tokens (id, refresh_token, access_token, expires_at, updated_at)
+              VALUES (1, ${account.refresh_token}, ${account.access_token ?? null}, ${account.expires_at ?? null}, NOW())
+              ON CONFLICT (id) DO UPDATE SET
+                refresh_token = EXCLUDED.refresh_token,
+                access_token = EXCLUDED.access_token,
+                expires_at = EXCLUDED.expires_at,
+                updated_at = NOW()
+            `;
+          } catch { /* non-fatal */ }
+        }
       }
 
       // Refresh token if expired

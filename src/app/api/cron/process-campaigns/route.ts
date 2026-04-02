@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { sql } from '@/lib/db';
+import { updateSheetCell, getSheetHeadersWithAuth, getFeedbackColumnIndices } from '@/lib/sheets';
 
 const MIN_ACCOUNT_DELAY_MS = 5000; // WaSender: 1 msg per 5s per account
 
@@ -36,6 +37,49 @@ async function sendMessage(account: any, phone: string, message: string): Promis
   } catch (err: any) {
     return { success: false, error: err.message };
   }
+}
+
+// Get a valid Google access token using the stored refresh token
+async function getGoogleAccessToken(): Promise<string | null> {
+  try {
+    const row = await sql`SELECT refresh_token, access_token, expires_at FROM google_tokens WHERE id = 1`;
+    if (!row.rows[0]?.refresh_token) return null;
+    const { refresh_token, access_token, expires_at } = row.rows[0];
+    if (access_token && expires_at && (Number(expires_at) - 60) > Date.now() / 1000) {
+      return access_token;
+    }
+    const res = await fetch('https://oauth2.googleapis.com/token', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({
+        client_id: process.env.GOOGLE_CLIENT_ID!,
+        client_secret: process.env.GOOGLE_CLIENT_SECRET!,
+        grant_type: 'refresh_token',
+        refresh_token,
+      }),
+    });
+    const data = await res.json();
+    if (!data.access_token) return null;
+    const newExpiry = Math.floor(Date.now() / 1000) + (data.expires_in || 3600);
+    await sql`UPDATE google_tokens SET access_token = ${data.access_token}, expires_at = ${newExpiry}, updated_at = NOW() WHERE id = 1`;
+    return data.access_token;
+  } catch {
+    return null;
+  }
+}
+
+async function writeFeedbackToSheet(
+  accessToken: string, sheetTab: string, accountName: string,
+  rowIndex: number, ownerNum: number
+): Promise<void> {
+  try {
+    const headers = await getSheetHeadersWithAuth(accessToken, sheetTab);
+    const feedbackCols = getFeedbackColumnIndices(headers, accountName);
+    const colIndex = feedbackCols[ownerNum];
+    if (colIndex === undefined || colIndex < 0) return;
+    const timestamp = new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+    await updateSheetCell(accessToken, sheetTab, rowIndex, colIndex, `Message Sent - ${timestamp}`);
+  } catch { /* non-fatal */ }
 }
 
 export async function GET(request: NextRequest) {
@@ -146,6 +190,16 @@ export async function GET(request: NextRequest) {
       if (result.success) {
         await sql`UPDATE campaign_messages SET status = 'sent', sent_at = NOW() WHERE id = ${msg.id}`;
         log.push(`Sent OK to ${msg.phone}`);
+        // Update Google Sheet feedback column
+        if (msg.row_index != null && campaign.sheet_tab && campaign.account_name) {
+          const accessToken = await getGoogleAccessToken();
+          if (accessToken) {
+            await writeFeedbackToSheet(accessToken, campaign.sheet_tab, campaign.account_name, msg.row_index, msg.owner_num || 1);
+            log.push(`Sheet feedback updated row ${msg.row_index}`);
+          } else {
+            log.push(`Sheet update skipped: no Google token stored`);
+          }
+        }
       } else {
         await sql`UPDATE campaign_messages SET status = 'failed', error_message = ${result.error || 'Unknown'}, sent_at = NOW() WHERE id = ${msg.id}`;
         log.push(`Failed ${msg.phone}: ${result.error}`);

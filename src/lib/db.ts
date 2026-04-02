@@ -114,6 +114,17 @@ export async function initializeDatabase() {
   // Add row_index for Google Sheets tracking
   await sql`ALTER TABLE campaign_messages ADD COLUMN IF NOT EXISTS row_index INTEGER`;
 
+  // Google OAuth tokens — used by cron to update sheets without browser session
+  await sql`
+    CREATE TABLE IF NOT EXISTS google_tokens (
+      id INTEGER PRIMARY KEY DEFAULT 1,
+      refresh_token TEXT NOT NULL,
+      access_token TEXT,
+      expires_at BIGINT,
+      updated_at TIMESTAMP DEFAULT NOW()
+    )
+  `;
+
   // Full-data server-side contact cache (entire Google Sheet stored as JSON)
   await sql`
     CREATE TABLE IF NOT EXISTS sheets_data_cache (
