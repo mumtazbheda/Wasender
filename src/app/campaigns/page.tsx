@@ -13,19 +13,40 @@ interface SheetRow {
   ahmedFeedback3: string;
 }
 
+interface GmbContact {
+  id: number;
+  business_name: string;
+  phone: string;
+  category: string;
+  city: string;
+  whatsapp_status: string;
+}
+
 type Step = "filter" | "select" | "compose" | "test" | "send";
+type DataSource = "sheets" | "gmb";
 
 export default function CampaignsPage() {
   const { data: session, status } = useSession();
   const isConnected = status === "authenticated" && session;
 
-  // Data state
+  // Data source
+  const [dataSource, setDataSource] = useState<DataSource>("sheets");
+
+  // Data state (Sheets)
   const [rows, setRows] = useState<SheetRow[]>([]);
   const [feedbackColIndices, setFeedbackColIndices] = useState({ fb1: -1, fb2: -1, fb3: -1 });
   const [tabs, setTabs] = useState<string[]>([]);
   const [selectedTab, setSelectedTab] = useState("Time 1 New");
   const [loading, setLoading] = useState(false);
   const [loadingTabs, setLoadingTabs] = useState(false);
+
+  // Data state (GMB)
+  const [gmbContacts, setGmbContacts] = useState<GmbContact[]>([]);
+  const [gmbCategories, setGmbCategories] = useState<{ category: string; count: number }[]>([]);
+  const [gmbCities, setGmbCities] = useState<{ city: string; count: number }[]>([]);
+  const [gmbFilterCategory, setGmbFilterCategory] = useState("");
+  const [gmbFilterCity, setGmbFilterCity] = useState("");
+  const [loadingGmb, setLoadingGmb] = useState(false);
 
   // Filter state
   const [filterColumn, setFilterColumn] = useState<"ahmedFeedback1" | "ahmedFeedback2" | "ahmedFeedback3">("ahmedFeedback1");
@@ -96,13 +117,51 @@ export default function CampaignsPage() {
     setLoading(false);
   }
 
+  // GMB data loader
+  async function loadGmbData() {
+    setLoadingGmb(true);
+    const params = new URLSearchParams();
+    params.set("status", "not_sent");
+    if (gmbFilterCategory) params.set("category", gmbFilterCategory);
+    if (gmbFilterCity) params.set("city", gmbFilterCity);
+    params.set("limit", "2000");
+    const res = await fetch(`/api/gmb-contacts?${params.toString()}`);
+    const data = await res.json();
+    if (data.success) {
+      setGmbContacts(data.contacts);
+      setGmbCategories(data.categories);
+      setGmbCities(data.cities);
+    }
+    setLoadingGmb(false);
+  }
+
+  // GMB filtered contacts
+  const gmbFilteredContacts = useMemo(() => {
+    return gmbContacts;
+  }, [gmbContacts]);
+
+  // GMB deduplicated selected contacts
+  const gmbSelectedContacts = useMemo(() => {
+    const selected = gmbFilteredContacts.filter((_, i) => selectedIndices.has(i));
+    const seenPhones = new Set<string>();
+    return selected.filter((c) => {
+      if (seenPhones.has(c.phone)) return false;
+      seenPhones.add(c.phone);
+      return true;
+    });
+  }, [gmbFilteredContacts, selectedIndices]);
+
   useEffect(() => {
     if (isConnected) loadTabs();
   }, [isConnected]);
 
   useEffect(() => {
-    if (isConnected && selectedTab) loadSheetData();
-  }, [isConnected, selectedTab]);
+    if (isConnected && selectedTab && dataSource === "sheets") loadSheetData();
+  }, [isConnected, selectedTab, dataSource]);
+
+  useEffect(() => {
+    if (dataSource === "gmb") loadGmbData();
+  }, [dataSource, gmbFilterCategory, gmbFilterCity]);
 
   // Selection helpers
   function toggleIndex(i: number) {
@@ -123,9 +182,10 @@ export default function CampaignsPage() {
   }
 
   function applyRange() {
-    const start = parseInt(rangeStart) - 1; // Convert to 0-based
+    const start = parseInt(rangeStart) - 1;
     const end = parseInt(rangeEnd) - 1;
-    if (isNaN(start) || isNaN(end) || start < 0 || end < start || end >= filteredRows.length) return;
+    const maxLen = dataSource === "sheets" ? filteredRows.length : gmbFilteredContacts.length;
+    if (isNaN(start) || isNaN(end) || start < 0 || end < start || end >= maxLen) return;
     const indices = new Set<number>();
     for (let i = start; i <= end; i++) indices.add(i);
     setSelectedIndices(indices);
@@ -134,6 +194,13 @@ export default function CampaignsPage() {
   // Build the personalized message for a row
   function buildMessage(row: SheetRow): string {
     return message.replace(/\{101\}/g, row.unitNumber);
+  }
+
+  function buildGmbMessage(contact: GmbContact): string {
+    return message
+      .replace(/\{name\}/g, contact.business_name)
+      .replace(/\{category\}/g, contact.category)
+      .replace(/\{city\}/g, contact.city);
   }
 
   // Test send
@@ -156,6 +223,78 @@ export default function CampaignsPage() {
     } else {
       setTestResult({ success: false, message: `Test failed: ${data.error}` });
     }
+  }
+
+  // GMB test send
+  async function handleGmbTestSend() {
+    if (!gmbSelectedContacts.length || !message) return;
+    setTestResult(null);
+
+    const first = gmbSelectedContacts[0];
+    const personalizedMsg = buildGmbMessage(first);
+
+    const res = await fetch("/api/send-message", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ phone: first.phone, text: personalizedMsg }),
+    });
+    const data = await res.json();
+
+    if (data.success) {
+      setTestResult({ success: true, message: `Test sent to ${first.phone} (${first.business_name})` });
+    } else {
+      setTestResult({ success: false, message: `Test failed: ${data.error}` });
+    }
+  }
+
+  // GMB bulk send
+  async function handleGmbBulkSend() {
+    if (!gmbSelectedContacts.length || !message) return;
+    setSending(true);
+    setSendComplete(false);
+    setSendProgress({ current: 0, total: gmbSelectedContacts.length, sent: 0, failed: 0 });
+
+    let sent = 0;
+    let failed = 0;
+
+    for (let i = 0; i < gmbSelectedContacts.length; i++) {
+      const contact = gmbSelectedContacts[i];
+      const personalizedMsg = buildGmbMessage(contact);
+
+      if (i > 0) {
+        const delay = (Math.random() * (delayMax - delayMin) + delayMin) * 1000;
+        await new Promise((resolve) => setTimeout(resolve, delay));
+      }
+
+      const res = await fetch("/api/send-message", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ phone: contact.phone, text: personalizedMsg }),
+      });
+      const data = await res.json();
+
+      if (data.success) {
+        sent++;
+        await fetch("/api/gmb-update", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ id: contact.id, whatsapp_status: "sent" }),
+        }).catch(() => {});
+      } else {
+        failed++;
+        await fetch("/api/gmb-update", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ id: contact.id, whatsapp_status: "failed" }),
+        }).catch(() => {});
+      }
+
+      setSendProgress({ current: i + 1, total: gmbSelectedContacts.length, sent, failed });
+    }
+
+    setSending(false);
+    setSendComplete(true);
+    loadGmbData();
   }
 
   // Bulk send
@@ -243,9 +382,33 @@ export default function CampaignsPage() {
     );
   }
 
+  const activeRows = dataSource === "sheets" ? filteredRows : gmbFilteredContacts;
+  const activeSelectedRows = dataSource === "sheets" ? selectedRows : gmbSelectedContacts;
+
   return (
     <div>
       <h1 className="text-2xl font-bold mb-6">Campaigns</h1>
+
+      {/* Data Source Selector */}
+      <div className="flex items-center gap-3 mb-4">
+        <span className="text-sm font-medium text-gray-600">Data Source:</span>
+        <button
+          onClick={() => { setDataSource("sheets"); setStep("filter"); setSelectedIndices(new Set()); setMessage(""); }}
+          className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+            dataSource === "sheets" ? "bg-green-600 text-white" : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+          }`}
+        >
+          Google Sheets
+        </button>
+        <button
+          onClick={() => { setDataSource("gmb"); setStep("filter"); setSelectedIndices(new Set()); setMessage(""); }}
+          className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+            dataSource === "gmb" ? "bg-blue-600 text-white" : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+          }`}
+        >
+          Google My Business
+        </button>
+      </div>
 
       {/* Step indicator */}
       <div className="flex items-center gap-2 mb-6 text-sm">
@@ -266,33 +429,69 @@ export default function CampaignsPage() {
         ))}
       </div>
 
-      {/* Tab selector */}
-      <div className="flex items-center gap-3 mb-4">
-        {loadingTabs ? (
-          <span className="text-sm text-gray-400">Loading tabs...</span>
-        ) : (
+      {/* Tab selector (Sheets only) */}
+      {dataSource === "sheets" && (
+        <div className="flex items-center gap-3 mb-4">
+          {loadingTabs ? (
+            <span className="text-sm text-gray-400">Loading tabs...</span>
+          ) : (
+            <select
+              value={selectedTab}
+              onChange={(e) => setSelectedTab(e.target.value)}
+              className="px-3 py-2 border rounded-lg text-sm bg-white"
+            >
+              {tabs.map((tab) => (
+                <option key={tab} value={tab}>{tab}</option>
+              ))}
+            </select>
+          )}
+          <button
+            onClick={loadSheetData}
+            disabled={loading}
+            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 text-sm"
+          >
+            {loading ? "Loading..." : "Refresh Data"}
+          </button>
+          <span className="text-sm text-gray-500">{rows.length} rows loaded</span>
+        </div>
+      )}
+
+      {/* GMB filter bar */}
+      {dataSource === "gmb" && (
+        <div className="flex items-center gap-3 mb-4 flex-wrap">
           <select
-            value={selectedTab}
-            onChange={(e) => setSelectedTab(e.target.value)}
+            value={gmbFilterCategory}
+            onChange={(e) => { setGmbFilterCategory(e.target.value); setSelectedIndices(new Set()); }}
             className="px-3 py-2 border rounded-lg text-sm bg-white"
           >
-            {tabs.map((tab) => (
-              <option key={tab} value={tab}>{tab}</option>
+            <option value="">All Categories</option>
+            {gmbCategories.map((c) => (
+              <option key={c.category} value={c.category}>{c.category} ({c.count})</option>
             ))}
           </select>
-        )}
-        <button
-          onClick={loadSheetData}
-          disabled={loading}
-          className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 text-sm"
-        >
-          {loading ? "Loading..." : "Refresh Data"}
-        </button>
-        <span className="text-sm text-gray-500">{rows.length} rows loaded</span>
-      </div>
+          <select
+            value={gmbFilterCity}
+            onChange={(e) => { setGmbFilterCity(e.target.value); setSelectedIndices(new Set()); }}
+            className="px-3 py-2 border rounded-lg text-sm bg-white"
+          >
+            <option value="">All Cities</option>
+            {gmbCities.map((c) => (
+              <option key={c.city} value={c.city}>{c.city} ({c.count})</option>
+            ))}
+          </select>
+          <button
+            onClick={loadGmbData}
+            disabled={loadingGmb}
+            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 text-sm"
+          >
+            {loadingGmb ? "Loading..." : "Refresh"}
+          </button>
+          <span className="text-sm text-gray-500">{gmbContacts.length} contacts (not sent)</span>
+        </div>
+      )}
 
       {/* STEP 1: Filter */}
-      {step === "filter" && (
+      {step === "filter" && dataSource === "sheets" && (
         <div className="bg-white rounded-xl border p-6 mb-4">
           <h2 className="text-lg font-semibold mb-4">Step 1: Filter by Feedback Column</h2>
 
@@ -338,7 +537,6 @@ export default function CampaignsPage() {
             {filterValue && <> with {feedbackColumnLabel[filterColumn]} = &quot;{filterValue}&quot;</>}
           </p>
 
-          {/* Preview table */}
           {filteredRows.length > 0 && (
             <div className="max-h-64 overflow-auto border rounded-lg">
               <table className="w-full text-sm">
@@ -379,10 +577,60 @@ export default function CampaignsPage() {
         </div>
       )}
 
+      {/* STEP 1: Filter (GMB) */}
+      {step === "filter" && dataSource === "gmb" && (
+        <div className="bg-white rounded-xl border p-6 mb-4">
+          <h2 className="text-lg font-semibold mb-4">Step 1: GMB Contacts (Not Sent)</h2>
+
+          <p className="text-sm text-gray-500 mb-4">
+            Showing <strong>{gmbFilteredContacts.length}</strong> contacts with status &quot;not sent&quot;.
+            Use the category and city filters above to narrow down.
+          </p>
+
+          {gmbFilteredContacts.length > 0 && (
+            <div className="max-h-64 overflow-auto border rounded-lg">
+              <table className="w-full text-sm">
+                <thead className="bg-gray-50 border-b sticky top-0">
+                  <tr>
+                    <th className="text-left px-3 py-2 font-medium text-gray-600">#</th>
+                    <th className="text-left px-3 py-2 font-medium text-gray-600">Business Name</th>
+                    <th className="text-left px-3 py-2 font-medium text-gray-600">Phone</th>
+                    <th className="text-left px-3 py-2 font-medium text-gray-600">Category</th>
+                    <th className="text-left px-3 py-2 font-medium text-gray-600">City</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y">
+                  {gmbFilteredContacts.slice(0, 50).map((c, i) => (
+                    <tr key={c.id} className="hover:bg-gray-50">
+                      <td className="px-3 py-2 text-gray-400">{i + 1}</td>
+                      <td className="px-3 py-2 font-medium">{c.business_name || "-"}</td>
+                      <td className="px-3 py-2 font-mono">{c.phone}</td>
+                      <td className="px-3 py-2 text-xs">{c.category || "-"}</td>
+                      <td className="px-3 py-2 text-xs">{c.city || "-"}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              {gmbFilteredContacts.length > 50 && (
+                <p className="text-xs text-gray-400 p-2 text-center">Showing first 50 of {gmbFilteredContacts.length}</p>
+              )}
+            </div>
+          )}
+
+          <button
+            onClick={() => setStep("select")}
+            disabled={gmbFilteredContacts.length === 0}
+            className="mt-4 px-6 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 font-medium"
+          >
+            Next: Select Contacts →
+          </button>
+        </div>
+      )}
+
       {/* STEP 2: Select */}
       {step === "select" && (
         <div className="bg-white rounded-xl border p-6 mb-4">
-          <h2 className="text-lg font-semibold mb-4">Step 2: Select Rows to Send</h2>
+          <h2 className="text-lg font-semibold mb-4">Step 2: Select {dataSource === "sheets" ? "Rows" : "Contacts"} to Send</h2>
 
           <div className="flex items-center gap-4 mb-4">
             <label className="flex items-center gap-2">
@@ -390,9 +638,9 @@ export default function CampaignsPage() {
                 type="radio"
                 name="selectionMode"
                 checked={selectionMode === "all"}
-                onChange={() => { setSelectionMode("all"); selectAll(); }}
+                onChange={() => { setSelectionMode("all"); setSelectedIndices(new Set(activeRows.map((_, i) => i))); }}
               />
-              <span className="text-sm">Select All ({filteredRows.length})</span>
+              <span className="text-sm">Select All ({activeRows.length})</span>
             </label>
             <label className="flex items-center gap-2">
               <input
@@ -419,20 +667,20 @@ export default function CampaignsPage() {
               <input
                 type="number"
                 min={1}
-                max={filteredRows.length}
+                max={activeRows.length}
                 value={rangeStart}
                 onChange={(e) => setRangeStart(e.target.value)}
-                placeholder="From row #"
+                placeholder="From #"
                 className="px-3 py-2 border rounded-lg text-sm w-28"
               />
               <span className="text-gray-400">to</span>
               <input
                 type="number"
                 min={1}
-                max={filteredRows.length}
+                max={activeRows.length}
                 value={rangeEnd}
                 onChange={(e) => setRangeEnd(e.target.value)}
-                placeholder="To row #"
+                placeholder="To #"
                 className="px-3 py-2 border rounded-lg text-sm w-28"
               />
               <button
@@ -445,11 +693,10 @@ export default function CampaignsPage() {
           )}
 
           <p className="text-sm text-gray-600 mb-3">
-            <strong>{selectedIndices.size}</strong> rows selected →{" "}
-            <strong>{selectedRows.length}</strong> unique phone numbers (after dedup)
+            <strong>{selectedIndices.size}</strong> selected →{" "}
+            <strong>{activeSelectedRows.length}</strong> unique phone numbers (after dedup)
           </p>
 
-          {/* Selectable list */}
           <div className="max-h-72 overflow-auto border rounded-lg">
             <table className="w-full text-sm">
               <thead className="bg-gray-50 border-b sticky top-0">
@@ -458,42 +705,66 @@ export default function CampaignsPage() {
                     <th className="px-3 py-2 w-8">
                       <input
                         type="checkbox"
-                        checked={selectedIndices.size === filteredRows.length && filteredRows.length > 0}
+                        checked={selectedIndices.size === activeRows.length && activeRows.length > 0}
                         onChange={() => {
-                          if (selectedIndices.size === filteredRows.length) deselectAll();
-                          else selectAll();
+                          if (selectedIndices.size === activeRows.length) deselectAll();
+                          else setSelectedIndices(new Set(activeRows.map((_, i) => i)));
                         }}
                       />
                     </th>
                   )}
                   <th className="text-left px-3 py-2 font-medium text-gray-600">#</th>
-                  <th className="text-left px-3 py-2 font-medium text-gray-600">Unit</th>
-                  <th className="text-left px-3 py-2 font-medium text-gray-600">Phone</th>
-                  <th className="text-left px-3 py-2 font-medium text-gray-600">{feedbackColumnLabel[filterColumn]}</th>
+                  {dataSource === "sheets" ? (
+                    <>
+                      <th className="text-left px-3 py-2 font-medium text-gray-600">Unit</th>
+                      <th className="text-left px-3 py-2 font-medium text-gray-600">Phone</th>
+                      <th className="text-left px-3 py-2 font-medium text-gray-600">{feedbackColumnLabel[filterColumn]}</th>
+                    </>
+                  ) : (
+                    <>
+                      <th className="text-left px-3 py-2 font-medium text-gray-600">Business</th>
+                      <th className="text-left px-3 py-2 font-medium text-gray-600">Phone</th>
+                      <th className="text-left px-3 py-2 font-medium text-gray-600">Category</th>
+                    </>
+                  )}
                 </tr>
               </thead>
               <tbody className="divide-y">
-                {filteredRows.map((r, i) => (
-                  <tr
-                    key={i}
-                    className={`hover:bg-gray-50 ${selectedIndices.has(i) ? "bg-green-50" : ""}`}
-                    onClick={() => selectionMode === "individual" && toggleIndex(i)}
-                  >
-                    {selectionMode === "individual" && (
-                      <td className="px-3 py-2">
-                        <input
-                          type="checkbox"
-                          checked={selectedIndices.has(i)}
-                          onChange={() => toggleIndex(i)}
-                        />
-                      </td>
-                    )}
-                    <td className="px-3 py-2 text-gray-400">{i + 1}</td>
-                    <td className="px-3 py-2 font-mono font-medium">{r.unitNumber || "-"}</td>
-                    <td className="px-3 py-2 font-mono">{r.phone}</td>
-                    <td className="px-3 py-2">{r[filterColumn] || "-"}</td>
-                  </tr>
-                ))}
+                {dataSource === "sheets"
+                  ? filteredRows.map((r, i) => (
+                      <tr
+                        key={i}
+                        className={`hover:bg-gray-50 ${selectedIndices.has(i) ? "bg-green-50" : ""}`}
+                        onClick={() => selectionMode === "individual" && toggleIndex(i)}
+                      >
+                        {selectionMode === "individual" && (
+                          <td className="px-3 py-2">
+                            <input type="checkbox" checked={selectedIndices.has(i)} onChange={() => toggleIndex(i)} />
+                          </td>
+                        )}
+                        <td className="px-3 py-2 text-gray-400">{i + 1}</td>
+                        <td className="px-3 py-2 font-mono font-medium">{r.unitNumber || "-"}</td>
+                        <td className="px-3 py-2 font-mono">{r.phone}</td>
+                        <td className="px-3 py-2">{r[filterColumn] || "-"}</td>
+                      </tr>
+                    ))
+                  : gmbFilteredContacts.map((c, i) => (
+                      <tr
+                        key={c.id}
+                        className={`hover:bg-gray-50 ${selectedIndices.has(i) ? "bg-green-50" : ""}`}
+                        onClick={() => selectionMode === "individual" && toggleIndex(i)}
+                      >
+                        {selectionMode === "individual" && (
+                          <td className="px-3 py-2">
+                            <input type="checkbox" checked={selectedIndices.has(i)} onChange={() => toggleIndex(i)} />
+                          </td>
+                        )}
+                        <td className="px-3 py-2 text-gray-400">{i + 1}</td>
+                        <td className="px-3 py-2 font-medium">{c.business_name || "-"}</td>
+                        <td className="px-3 py-2 font-mono">{c.phone}</td>
+                        <td className="px-3 py-2 text-xs">{c.category || "-"}</td>
+                      </tr>
+                    ))}
               </tbody>
             </table>
           </div>
@@ -507,7 +778,7 @@ export default function CampaignsPage() {
             </button>
             <button
               onClick={() => setStep("compose")}
-              disabled={selectedRows.length === 0}
+              disabled={activeSelectedRows.length === 0}
               className="px-6 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 font-medium"
             >
               Next: Compose Message →
@@ -522,28 +793,41 @@ export default function CampaignsPage() {
           <h2 className="text-lg font-semibold mb-4">Step 3: Compose Message</h2>
 
           <p className="text-sm text-gray-600 mb-3">
-            Sending to <strong>{selectedRows.length}</strong> unique phone numbers.
-            Use <code className="bg-gray-100 px-1 rounded">{"{101}"}</code> as a variable — it will be replaced with the unit number for each contact.
+            Sending to <strong>{activeSelectedRows.length}</strong> unique phone numbers.
+            {dataSource === "sheets" ? (
+              <> Use <code className="bg-gray-100 px-1 rounded">{"{101}"}</code> as a variable — it will be replaced with the unit number.</>
+            ) : (
+              <> Use <code className="bg-gray-100 px-1 rounded">{"{name}"}</code>, <code className="bg-gray-100 px-1 rounded">{"{category}"}</code>, <code className="bg-gray-100 px-1 rounded">{"{city}"}</code> as variables.</>
+            )}
           </p>
 
           <textarea
             value={message}
             onChange={(e) => setMessage(e.target.value)}
-            placeholder={`Example: Hello, this is regarding unit {101}. We would like to follow up with you.`}
+            placeholder={dataSource === "sheets"
+              ? `Example: Hello, this is regarding unit {101}. We would like to follow up with you.`
+              : `Example: Hi {name}, we noticed your business in {city}. We'd love to discuss a potential collaboration!`
+            }
             rows={6}
             className="w-full px-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-500 resize-none mb-4"
             required
           />
 
           {/* Preview */}
-          {message && selectedRows.length > 0 && (
+          {message && activeSelectedRows.length > 0 && (
             <div className="bg-gray-50 rounded-lg p-4 mb-4">
               <h3 className="text-sm font-medium text-gray-600 mb-2">Preview (first contact):</h3>
               <div className="bg-white rounded-lg p-3 border text-sm whitespace-pre-wrap">
-                {buildMessage(selectedRows[0])}
+                {dataSource === "sheets"
+                  ? buildMessage(selectedRows[0])
+                  : buildGmbMessage(gmbSelectedContacts[0])
+                }
               </div>
               <p className="text-xs text-gray-400 mt-1">
-                → {selectedRows[0].phone} (Unit: {selectedRows[0].unitNumber})
+                {dataSource === "sheets"
+                  ? `→ ${selectedRows[0]?.phone} (Unit: ${selectedRows[0]?.unitNumber})`
+                  : `→ ${gmbSelectedContacts[0]?.phone} (${gmbSelectedContacts[0]?.business_name})`
+                }
               </p>
             </div>
           )}
@@ -599,15 +883,27 @@ export default function CampaignsPage() {
           </p>
 
           <div className="bg-gray-50 rounded-lg p-4 mb-4">
-            <p className="text-sm"><strong>To:</strong> {selectedRows[0]?.phone} (Unit: {selectedRows[0]?.unitNumber})</p>
-            <p className="text-sm mt-2"><strong>Message:</strong></p>
-            <div className="bg-white rounded-lg p-3 border text-sm whitespace-pre-wrap mt-1">
-              {selectedRows[0] ? buildMessage(selectedRows[0]) : ""}
-            </div>
+            {dataSource === "sheets" ? (
+              <>
+                <p className="text-sm"><strong>To:</strong> {selectedRows[0]?.phone} (Unit: {selectedRows[0]?.unitNumber})</p>
+                <p className="text-sm mt-2"><strong>Message:</strong></p>
+                <div className="bg-white rounded-lg p-3 border text-sm whitespace-pre-wrap mt-1">
+                  {selectedRows[0] ? buildMessage(selectedRows[0]) : ""}
+                </div>
+              </>
+            ) : (
+              <>
+                <p className="text-sm"><strong>To:</strong> {gmbSelectedContacts[0]?.phone} ({gmbSelectedContacts[0]?.business_name})</p>
+                <p className="text-sm mt-2"><strong>Message:</strong></p>
+                <div className="bg-white rounded-lg p-3 border text-sm whitespace-pre-wrap mt-1">
+                  {gmbSelectedContacts[0] ? buildGmbMessage(gmbSelectedContacts[0]) : ""}
+                </div>
+              </>
+            )}
           </div>
 
           <button
-            onClick={handleTestSend}
+            onClick={dataSource === "sheets" ? handleTestSend : handleGmbTestSend}
             className="px-6 py-2 bg-yellow-500 text-white rounded-lg hover:bg-yellow-600 font-medium mb-4"
           >
             Send Test Message
@@ -646,17 +942,23 @@ export default function CampaignsPage() {
           <h2 className="text-lg font-semibold mb-4">Step 5: Bulk Send</h2>
 
           <div className="bg-gray-50 rounded-lg p-4 mb-4 text-sm">
-            <p><strong>Total unique contacts:</strong> {selectedRows.length}</p>
+            <p><strong>Source:</strong> {dataSource === "sheets" ? "Google Sheets" : "Google My Business"}</p>
+            <p><strong>Total unique contacts:</strong> {activeSelectedRows.length}</p>
             <p><strong>Delay:</strong> {delayMin}–{delayMax} seconds between messages</p>
-            <p><strong>After sending:</strong> {feedbackColumnLabel[filterColumn]} will be updated to &quot;No Reply&quot;</p>
+            {dataSource === "sheets" && (
+              <p><strong>After sending:</strong> {feedbackColumnLabel[filterColumn]} will be updated to &quot;No Reply&quot;</p>
+            )}
+            {dataSource === "gmb" && (
+              <p><strong>After sending:</strong> Contact status will be updated to &quot;sent&quot; or &quot;failed&quot;</p>
+            )}
           </div>
 
           {!sending && !sendComplete && (
             <button
-              onClick={handleBulkSend}
+              onClick={dataSource === "sheets" ? handleBulkSend : handleGmbBulkSend}
               className="px-8 py-3 bg-red-600 text-white rounded-lg hover:bg-red-700 font-medium"
             >
-              Start Sending to {selectedRows.length} Contacts
+              Start Sending to {activeSelectedRows.length} Contacts
             </button>
           )}
 

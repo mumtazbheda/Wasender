@@ -41,6 +41,25 @@ export async function initializeDatabase() {
       created_at TIMESTAMP DEFAULT NOW()
     )
   `;
+
+  await sql`
+    CREATE TABLE IF NOT EXISTS gmb_contacts (
+      id SERIAL PRIMARY KEY,
+      file_name TEXT,
+      business_name TEXT,
+      phone TEXT NOT NULL,
+      category TEXT,
+      address TEXT,
+      city TEXT,
+      rating TEXT,
+      reviews TEXT,
+      website TEXT,
+      extra_data JSONB DEFAULT '{}',
+      whatsapp_status TEXT DEFAULT 'not_sent' CHECK (whatsapp_status IN ('not_sent', 'sent', 'failed', 'invalid')),
+      sent_at TIMESTAMP,
+      created_at TIMESTAMP DEFAULT NOW()
+    )
+  `;
 }
 
 export { sql };
