@@ -315,8 +315,12 @@ export default function ContactsPage() {
   const [filters, setFilters] = useState({
     purpose: [] as string[],
     rooms: [] as string[],
+    portal_bedrooms: [] as string[],
     listing_status: [] as string[],
     rental_contract_status: [] as string[],
+    furnishing: [] as string[],
+    vacancy_status: [] as string[],
+    vam_listing_status: [] as string[],
     ahmed_feedback_1: [] as string[],
     ahmed_feedback_2: [] as string[],
     ahmed_feedback_3: [] as string[],
@@ -601,8 +605,12 @@ export default function ContactsPage() {
       const matchFilters =
         mf(filters.purpose, contact.purpose) &&
         mf(filters.rooms, contact.rooms_en) &&
+        mf(filters.portal_bedrooms, contact.portal_bedrooms) &&
         mf(filters.listing_status, contact.listing_status) &&
         mf(filters.rental_contract_status, contact.rental_contract_status) &&
+        mf(filters.furnishing, contact.furnishing) &&
+        mf(filters.vacancy_status, contact.vacancy_status) &&
+        mf(filters.vam_listing_status, contact.vam_listing_status) &&
         mf(filters.ahmed_feedback_1, contact.ahmed_feedback_1) &&
         mf(filters.ahmed_feedback_2, contact.ahmed_feedback_2) &&
         mf(filters.ahmed_feedback_3, contact.ahmed_feedback_3) &&
@@ -1252,6 +1260,34 @@ export default function ContactsPage() {
                 options={getUniqueValues("rental_contract_status")}
                 selected={filters.rental_contract_status}
                 onChange={(vals) => setFilters({ ...filters, rental_contract_status: vals })}
+              />
+
+              <MultiSelectDropdown
+                label="Portal Bedrooms"
+                options={getUniqueValues("portal_bedrooms")}
+                selected={filters.portal_bedrooms}
+                onChange={(vals) => setFilters({ ...filters, portal_bedrooms: vals })}
+              />
+
+              <MultiSelectDropdown
+                label="Furnishing"
+                options={getUniqueValues("furnishing")}
+                selected={filters.furnishing}
+                onChange={(vals) => setFilters({ ...filters, furnishing: vals })}
+              />
+
+              <MultiSelectDropdown
+                label="Vacancy Status"
+                options={getUniqueValues("vacancy_status")}
+                selected={filters.vacancy_status}
+                onChange={(vals) => setFilters({ ...filters, vacancy_status: vals })}
+              />
+
+              <MultiSelectDropdown
+                label="VAM Listing Status"
+                options={getUniqueValues("vam_listing_status")}
+                selected={filters.vam_listing_status}
+                onChange={(vals) => setFilters({ ...filters, vam_listing_status: vals })}
               />
 
               {/* Ahmed Feedback Filters */}

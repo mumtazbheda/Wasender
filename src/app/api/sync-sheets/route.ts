@@ -27,8 +27,19 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Load saved column mappings for this tab
+    const savedMappings: Record<string, string> = {};
+    try {
+      const mappingsRes = await sql`
+        SELECT source_header, standard_field FROM column_mappings WHERE sheet_tab = ${sheetName}
+      `;
+      for (const row of mappingsRes.rows) {
+        savedMappings[row.source_header] = row.standard_field;
+      }
+    } catch { /* ignore if table doesn't exist yet */ }
+
     // Fetch contacts from Google Sheet
-    const contacts = await fetchContactsFromSheet(accessToken, sheetName);
+    const contacts = await fetchContactsFromSheet(accessToken, sheetName, savedMappings);
     let synced = 0;
 
     // Sync each contact to database

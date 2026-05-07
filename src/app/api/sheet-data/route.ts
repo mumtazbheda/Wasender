@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 import { fetchContactData } from "@/lib/sheets";
+import { sql } from "@/lib/db";
 
 export async function GET(request: NextRequest) {
   try {
@@ -24,7 +25,18 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    const contacts = await fetchContactData(accessToken, sheetName);
+    // Load saved column mappings for this tab from DB
+    const savedMappings: Record<string, string> = {};
+    try {
+      const mappingsRes = await sql`
+        SELECT source_header, standard_field FROM column_mappings WHERE sheet_tab = ${sheetName}
+      `;
+      for (const row of mappingsRes.rows) {
+        savedMappings[row.source_header] = row.standard_field;
+      }
+    } catch { /* table may not exist yet — ignore */ }
+
+    const contacts = await fetchContactData(accessToken, sheetName, savedMappings);
 
     return NextResponse.json({
       success: true,

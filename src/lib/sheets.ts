@@ -182,7 +182,8 @@ export async function fetchSheetTabs(accessToken: string): Promise<string[]> {
 // Main function - used by sheet-data API and contacts page
 export async function fetchContactData(
   accessToken: string,
-  sheetTab: string
+  sheetTab: string,
+  savedMappings?: Record<string, string>
 ): Promise<Contact[]> {
   const spreadsheetId = process.env.GOOGLE_SHEET_ID;
   if (!spreadsheetId) throw new Error("GOOGLE_SHEET_ID is not set");
@@ -195,6 +196,17 @@ export async function fetchContactData(
 
   const headers = rawRows[0].map((h: string) => h.toString().trim());
   const columnIndices = detectColumns(headers);
+
+  // Override auto-detected indices with any saved DB column mappings
+  if (savedMappings && Object.keys(savedMappings).length > 0) {
+    const headersLower = headers.map((h: string) => h.toLowerCase());
+    for (const [sourceHeader, standardField] of Object.entries(savedMappings)) {
+      const idx = headersLower.indexOf(sourceHeader.trim().toLowerCase());
+      if (idx >= 0 && standardField in columnIndices) {
+        (columnIndices as Record<string, number>)[standardField] = idx;
+      }
+    }
+  }
 
   // Detect area unit from header name — SQM means square meters (convert to sqft), anything else is sqft already
   const detectAreaUnit = (idx: number): 'sqm' | 'sqft' => {
