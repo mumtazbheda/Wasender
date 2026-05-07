@@ -163,8 +163,8 @@ const EDIT_FIELD_GROUPS = [
     fields: [
       { key: "unit", label: "Unit" },
       { key: "rooms_en", label: "Rooms" },
-      { key: "actual_area", label: "Actual Area (sqm)" },
-      { key: "unit_balcony_area", label: "Balcony Area (sqm)" },
+      { key: "actual_area", label: "Actual Area (sqft)" },
+      { key: "unit_balcony_area", label: "Balcony Area (sqft)" },
       { key: "unit_parking_number", label: "Parking Number" },
       { key: "furnishing", label: "Furnishing" },
       { key: "view", label: "View" },
@@ -332,6 +332,12 @@ export default function ContactsPage() {
     owner1CountryCode: '' as string,
     owner2CountryCode: '' as string,
     owner3CountryCode: '' as string,
+    actualAreaFrom: '' as string,
+    actualAreaTo: '' as string,
+    plotAreaFrom: '' as string,
+    plotAreaTo: '' as string,
+    buaFrom: '' as string,
+    buaTo: '' as string,
   });
 
   // ─── Load sheets on mount ─────────────────────────────────────────────────
@@ -628,7 +634,15 @@ export default function ContactsPage() {
           (filters.owner3CountryCode === 'uae' && isUAEPhone(contact.owner3_mobile)) ||
           (filters.owner3CountryCode === 'nonuae' && contact.owner3_mobile && String(contact.owner3_mobile).trim() !== '' && !isUAEPhone(contact.owner3_mobile)));
 
-      return matchSearch && matchFilters;
+      const matchAreaRanges =
+        (!filters.actualAreaFrom || contact.actual_area >= parseFloat(filters.actualAreaFrom)) &&
+        (!filters.actualAreaTo || contact.actual_area <= parseFloat(filters.actualAreaTo)) &&
+        (!filters.plotAreaFrom || contact.plot_area >= parseFloat(filters.plotAreaFrom)) &&
+        (!filters.plotAreaTo || contact.plot_area <= parseFloat(filters.plotAreaTo)) &&
+        (!filters.buaFrom || contact.built_up_area >= parseFloat(filters.buaFrom)) &&
+        (!filters.buaTo || contact.built_up_area <= parseFloat(filters.buaTo));
+
+      return matchSearch && matchFilters && matchAreaRanges;
     });
 
     // Apply sorting
@@ -1301,6 +1315,46 @@ export default function ContactsPage() {
               />
             </div>
 
+            {/* Area Range Filters */}
+            <div className="mt-4">
+              <h4 className="text-sm font-bold text-gray-700 mb-2">📐 Area Range Filters (sqft)</h4>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <div>
+                  <label className="block text-xs font-bold text-gray-600 mb-1">Actual Area</label>
+                  <div className="flex gap-2">
+                    <input type="number" placeholder="From" value={filters.actualAreaFrom}
+                      onChange={(e) => setFilters({ ...filters, actualAreaFrom: e.target.value })}
+                      className="w-full border rounded-lg px-2 py-2 text-sm" />
+                    <input type="number" placeholder="To" value={filters.actualAreaTo}
+                      onChange={(e) => setFilters({ ...filters, actualAreaTo: e.target.value })}
+                      className="w-full border rounded-lg px-2 py-2 text-sm" />
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-gray-600 mb-1">Plot Area</label>
+                  <div className="flex gap-2">
+                    <input type="number" placeholder="From" value={filters.plotAreaFrom}
+                      onChange={(e) => setFilters({ ...filters, plotAreaFrom: e.target.value })}
+                      className="w-full border rounded-lg px-2 py-2 text-sm" />
+                    <input type="number" placeholder="To" value={filters.plotAreaTo}
+                      onChange={(e) => setFilters({ ...filters, plotAreaTo: e.target.value })}
+                      className="w-full border rounded-lg px-2 py-2 text-sm" />
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-gray-600 mb-1">BUA</label>
+                  <div className="flex gap-2">
+                    <input type="number" placeholder="From" value={filters.buaFrom}
+                      onChange={(e) => setFilters({ ...filters, buaFrom: e.target.value })}
+                      className="w-full border rounded-lg px-2 py-2 text-sm" />
+                    <input type="number" placeholder="To" value={filters.buaTo}
+                      onChange={(e) => setFilters({ ...filters, buaTo: e.target.value })}
+                      className="w-full border rounded-lg px-2 py-2 text-sm" />
+                  </div>
+                </div>
+              </div>
+            </div>
+
             {/* Owner Mobile Filters */}
             <div className="mt-4">
               <h4 className="text-sm font-bold text-gray-700 mb-2">📱 Owner Mobile Filters</h4>
@@ -1386,6 +1440,18 @@ export default function ContactsPage() {
                         </span>
                       </div>
 
+                      {/* Portal Bedrooms (show when present) */}
+                      {contact.portal_bedrooms && (
+                        <div className="flex justify-between items-center border-b pb-3">
+                          <span className="text-gray-600 font-medium">
+                            Portal Beds:
+                          </span>
+                          <span className="text-gray-900 font-semibold">
+                            {contact.portal_bedrooms}
+                          </span>
+                        </div>
+                      )}
+
                       {/* Property Size */}
                       <div className="flex justify-between items-center border-b pb-3">
                         <span className="text-gray-600 font-medium">
@@ -1393,24 +1459,47 @@ export default function ContactsPage() {
                         </span>
                         <span className="text-gray-900 font-semibold">
                           {contact.actual_area
-                            ? (contact.actual_area * 10.764).toFixed(0)
+                            ? Math.round(contact.actual_area)
                             : "N/A"}{" "}
                           sqft
                         </span>
                       </div>
 
-                      {/* Balcony Size */}
-                      <div className="flex justify-between items-center border-b pb-3">
-                        <span className="text-gray-600 font-medium">
-                          Balcony Size:
-                        </span>
-                        <span className="text-gray-900 font-semibold">
-                          {contact.unit_balcony_area
-                            ? (contact.unit_balcony_area * 10.764).toFixed(0)
-                            : "N/A"}{" "}
-                          sqft
-                        </span>
-                      </div>
+                      {/* Balcony Size — only shown when non-zero */}
+                      {contact.unit_balcony_area > 0 && (
+                        <div className="flex justify-between items-center border-b pb-3">
+                          <span className="text-gray-600 font-medium">
+                            Balcony Size:
+                          </span>
+                          <span className="text-gray-900 font-semibold">
+                            {Math.round(contact.unit_balcony_area)} sqft
+                          </span>
+                        </div>
+                      )}
+
+                      {/* Plot Area — only shown when present */}
+                      {contact.plot_area > 0 && (
+                        <div className="flex justify-between items-center border-b pb-3">
+                          <span className="text-gray-600 font-medium">
+                            Plot Area:
+                          </span>
+                          <span className="text-gray-900 font-semibold">
+                            {Math.round(contact.plot_area)} sqft
+                          </span>
+                        </div>
+                      )}
+
+                      {/* BUA — only shown when present */}
+                      {contact.built_up_area > 0 && (
+                        <div className="flex justify-between items-center border-b pb-3">
+                          <span className="text-gray-600 font-medium">
+                            BUA:
+                          </span>
+                          <span className="text-gray-900 font-semibold">
+                            {Math.round(contact.built_up_area)} sqft
+                          </span>
+                        </div>
+                      )}
 
                       {/* Days Remaining */}
                       <div
@@ -1503,8 +1592,11 @@ export default function ContactsPage() {
                 <ViewSection title="🏠 Property Details" isOpen={openSections['prop'] !== false} onToggle={() => toggleSection('prop')}>
                   <LabelValue label="Unit Number" value={selectedContact.unit} />
                   <LabelValue label="Rooms" value={selectedContact.rooms_en} />
-                  <LabelValue label="Property Size" value={selectedContact.actual_area ? `${(selectedContact.actual_area * 10.764).toFixed(0)} sqft` : "—"} />
-                  <LabelValue label="Balcony Size" value={selectedContact.unit_balcony_area ? `${(selectedContact.unit_balcony_area * 10.764).toFixed(0)} sqft` : "—"} />
+                  <LabelValue label="Property Size" value={selectedContact.actual_area ? `${Math.round(selectedContact.actual_area)} sqft` : "—"} />
+                  {selectedContact.unit_balcony_area > 0 && <LabelValue label="Balcony Size" value={`${Math.round(selectedContact.unit_balcony_area)} sqft`} />}
+                  {selectedContact.plot_area > 0 && <LabelValue label="Plot Area" value={`${Math.round(selectedContact.plot_area)} sqft`} />}
+                  {selectedContact.built_up_area > 0 && <LabelValue label="BUA" value={`${Math.round(selectedContact.built_up_area)} sqft`} />}
+                  <LabelValue label="Portal Bedrooms" value={selectedContact.portal_bedrooms || "—"} />
                   <LabelValue label="Parking Number" value={selectedContact.unit_parking_number || "—"} />
                   <LabelValue label="Project Name" value={selectedContact.project_name_en || "—"} />
                 </ViewSection>

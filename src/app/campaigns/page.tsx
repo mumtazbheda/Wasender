@@ -134,6 +134,12 @@ export default function CampaignsPage() {
     owner1CountryCode: '' as string,
     owner2CountryCode: '' as string,
     owner3CountryCode: '' as string,
+    actualAreaFrom: '' as string,
+    actualAreaTo: '' as string,
+    plotAreaFrom: '' as string,
+    plotAreaTo: '' as string,
+    buaFrom: '' as string,
+    buaTo: '' as string,
   });
 
   // Delay settings
@@ -452,7 +458,15 @@ export default function CampaignsPage() {
           (filters.owner3CountryCode === 'uae' && isUAEPhone(contact.owner3_mobile)) ||
           (filters.owner3CountryCode === 'nonuae' && contact.owner3_mobile && String(contact.owner3_mobile).trim() !== '' && !isUAEPhone(contact.owner3_mobile)));
 
-      return matchSearch && matchFilters;
+      const matchAreaRanges =
+        (!filters.actualAreaFrom || contact.actual_area >= parseFloat(filters.actualAreaFrom)) &&
+        (!filters.actualAreaTo || contact.actual_area <= parseFloat(filters.actualAreaTo)) &&
+        (!filters.plotAreaFrom || contact.plot_area >= parseFloat(filters.plotAreaFrom)) &&
+        (!filters.plotAreaTo || contact.plot_area <= parseFloat(filters.plotAreaTo)) &&
+        (!filters.buaFrom || contact.built_up_area >= parseFloat(filters.buaFrom)) &&
+        (!filters.buaTo || contact.built_up_area <= parseFloat(filters.buaTo));
+
+      return matchSearch && matchFilters && matchAreaRanges;
     });
 
     // Apply sorting
@@ -1133,6 +1147,46 @@ export default function CampaignsPage() {
                 />
               </div>
 
+              {/* Area Range Filters */}
+              <div className="mt-4">
+                <h4 className="text-sm font-bold text-gray-700 mb-2">📐 Area Range Filters (sqft)</h4>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                  <div>
+                    <label className="block text-xs font-bold text-gray-600 mb-1">Actual Area</label>
+                    <div className="flex gap-2">
+                      <input type="number" placeholder="From" value={filters.actualAreaFrom}
+                        onChange={(e) => setFilters({ ...filters, actualAreaFrom: e.target.value })}
+                        className="w-full border rounded-lg px-2 py-2 text-sm" />
+                      <input type="number" placeholder="To" value={filters.actualAreaTo}
+                        onChange={(e) => setFilters({ ...filters, actualAreaTo: e.target.value })}
+                        className="w-full border rounded-lg px-2 py-2 text-sm" />
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold text-gray-600 mb-1">Plot Area</label>
+                    <div className="flex gap-2">
+                      <input type="number" placeholder="From" value={filters.plotAreaFrom}
+                        onChange={(e) => setFilters({ ...filters, plotAreaFrom: e.target.value })}
+                        className="w-full border rounded-lg px-2 py-2 text-sm" />
+                      <input type="number" placeholder="To" value={filters.plotAreaTo}
+                        onChange={(e) => setFilters({ ...filters, plotAreaTo: e.target.value })}
+                        className="w-full border rounded-lg px-2 py-2 text-sm" />
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold text-gray-600 mb-1">BUA</label>
+                    <div className="flex gap-2">
+                      <input type="number" placeholder="From" value={filters.buaFrom}
+                        onChange={(e) => setFilters({ ...filters, buaFrom: e.target.value })}
+                        className="w-full border rounded-lg px-2 py-2 text-sm" />
+                      <input type="number" placeholder="To" value={filters.buaTo}
+                        onChange={(e) => setFilters({ ...filters, buaTo: e.target.value })}
+                        className="w-full border rounded-lg px-2 py-2 text-sm" />
+                    </div>
+                  </div>
+                </div>
+              </div>
+
               {/* Owner Mobile Filters */}
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mt-4">
                 <div>
@@ -1389,11 +1443,11 @@ export default function CampaignsPage() {
                       <LabelValue label="Rooms" value={selectedContact.rooms_en} />
                       <LabelValue
                         label="Property Size"
-                        value={selectedContact.actual_area ? `${(selectedContact.actual_area * 10.764).toFixed(0)} sqft` : "N/A"}
+                        value={selectedContact.actual_area ? `${Math.round(selectedContact.actual_area)} sqft` : "N/A"}
                       />
                       <LabelValue
                         label="Balcony Size"
-                        value={selectedContact.unit_balcony_area ? `${(selectedContact.unit_balcony_area * 10.764).toFixed(0)} sqft` : "N/A"}
+                        value={selectedContact.unit_balcony_area ? `${Math.round(selectedContact.unit_balcony_area)} sqft` : "N/A"}
                       />
                       <LabelValue label="Parking Number" value={selectedContact.unit_parking_number} />
                       <LabelValue label="Furnishing" value={selectedContact.furnishing} />

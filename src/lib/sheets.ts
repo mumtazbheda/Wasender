@@ -196,6 +196,21 @@ export async function fetchContactData(
   const headers = rawRows[0].map((h: string) => h.toString().trim());
   const columnIndices = detectColumns(headers);
 
+  // Detect area unit from header name — SQM means square meters (convert to sqft), anything else is sqft already
+  const detectAreaUnit = (idx: number): 'sqm' | 'sqft' => {
+    if (idx < 0) return 'sqft';
+    const h = headers[idx].toLowerCase();
+    if (h.includes('sqm') || h.includes('sq.m') || h.includes('square meter')) return 'sqm';
+    return 'sqft';
+  };
+  const toSqft = (val: number, unit: 'sqm' | 'sqft'): number =>
+    unit === 'sqm' ? Math.round(val * 10.764) : val;
+
+  const actualAreaUnit = detectAreaUnit(columnIndices.actual_area);
+  const balconyAreaUnit = detectAreaUnit(columnIndices.unit_balcony_area);
+  const plotAreaUnit = detectAreaUnit(columnIndices.plot_area);
+  const buaUnit = detectAreaUnit(columnIndices.built_up_area);
+
   const contacts: Contact[] = [];
   for (let i = 1; i < rawRows.length; i++) {
     const row = rawRows[i];
@@ -226,8 +241,8 @@ export async function fetchContactData(
       owner3_mobile: getStringValue(columnIndices.owner3_mobile).replace(/[^0-9+]/g, ""),
       owner3_email: getStringValue(columnIndices.owner3_email),
       rooms_en: getStringValue(columnIndices.rooms_en),
-      actual_area: getNumberValue(columnIndices.actual_area),
-      unit_balcony_area: getNumberValue(columnIndices.unit_balcony_area),
+      actual_area: toSqft(getNumberValue(columnIndices.actual_area), actualAreaUnit),
+      unit_balcony_area: toSqft(getNumberValue(columnIndices.unit_balcony_area), balconyAreaUnit),
       unit_parking_number: getStringValue(columnIndices.unit_parking_number),
       rent_end_date: getStringValue(columnIndices.rent_end_date),
       listing_status: getStringValue(columnIndices.listing_status),
@@ -281,8 +296,8 @@ export async function fetchContactData(
       bayut_links: getStringValue(columnIndices.bayut_links),
       pf_links: getStringValue(columnIndices.pf_links),
       portal_bedrooms: getStringValue(columnIndices.portal_bedrooms),
-      plot_area: getNumberValue(columnIndices.plot_area),
-      built_up_area: getNumberValue(columnIndices.built_up_area),
+      plot_area: toSqft(getNumberValue(columnIndices.plot_area), plotAreaUnit),
+      built_up_area: toSqft(getNumberValue(columnIndices.built_up_area), buaUnit),
       permit_number: getStringValue(columnIndices.permit_number),
       comment: getStringValue(columnIndices.comment),
     });
