@@ -96,7 +96,7 @@ function detectColumns(headers: string[]) {
     owner3_name: findByName(["owner 3"]),
     owner3_mobile: findByName(["owner 3 mobile", "owner 3 contact"]),
     owner3_email: findByName(["owner 3 email"]),
-    rooms_en: findByName(["rooms", "rooms_en"]),
+    rooms_en: h.findIndex(x => (x.includes('rooms') || x.includes('rooms_en')) && !x.includes('bedroom')),
     actual_area: findByName(["actual area", "actual_area"]),
     unit_balcony_area: findByName(["unit balcony", "balcony area", "balcony"]),
     unit_parking_number: findByName(["parking"]),
@@ -116,13 +116,14 @@ function detectColumns(headers: string[]) {
     asma_feedback_1: findByName(["asma feedback 1", "asma feedback"]),
     asma_feedback_2: findByName(["asma feedback 2"]),
     asma_feedback_3: findByName(["asma feedback 3"]),
-    status: findByName(["status"]),
+    // "status" only — exclude all compound status columns (listing status, rental status, etc.)
+    status: h.findIndex(x => x.includes('status') && !x.includes('listing') && !x.includes('rental') && !x.includes('occupancy') && !x.includes('vacancy') && !x.includes('vam') && !x.includes('contract') && !x.includes('transaction')),
     latest_transaction_date: findByName(["latest transaction date", "transaction date"]),
     latest_transaction_amount: findByName(["latest transaction amount", "transaction amount"]),
     occupancy_status: findByName(["occupancy"]),
     rent_start_date: findByName(["rent start"]),
     rent_duration: findByName(["rent duration", "duration"]),
-    rent_price: findByName(["rent price", "price"]),
+    rent_price: findByName(["rent price"]),
     rental_status_date: findByName(["rental status date"]),
     rental_months_pending_expired: findByName(["months pending", "pending"]),
     furnishing: findByName(["furnish"]),
@@ -201,6 +202,8 @@ export async function fetchContactData(
   if (savedMappings && Object.keys(savedMappings).length > 0) {
     const headersLower = headers.map((h: string) => h.toLowerCase());
     for (const [sourceHeader, standardField] of Object.entries(savedMappings)) {
+      // Guard: don't let a "bedroom" header override rooms_en
+      if (standardField === 'rooms_en' && sourceHeader.toLowerCase().includes('bedroom')) continue;
       const idx = headersLower.indexOf(sourceHeader.trim().toLowerCase());
       if (idx >= 0 && standardField in columnIndices) {
         (columnIndices as Record<string, number>)[standardField] = idx;

@@ -11,6 +11,8 @@ export interface StandardColumn {
 export const STANDARD_COLUMNS: StandardColumn[] = [
   // Property Info
   { field: 'unit', label: 'Unit', type: 'text', group: 'Property', autoMatchHints: ['unit'] },
+  // portal_bedrooms must be listed BEFORE rooms_en so "Portal Bedrooms" header matches it first
+  { field: 'portal_bedrooms', label: 'Portal Bedrooms', type: 'text', group: 'Portals', autoMatchHints: ['portal bedroom', 'portal bed', 'bedrooms'] },
   { field: 'rooms_en', label: 'Rooms', type: 'text', group: 'Property', autoMatchHints: ['rooms', 'rooms_en'] },
   { field: 'actual_area', label: 'Actual Area', type: 'number', group: 'Property', autoMatchHints: ['actual area', 'actual_area'] },
   { field: 'unit_balcony_area', label: 'Balcony Area', type: 'number', group: 'Property', autoMatchHints: ['balcony area', 'unit balcony', 'balcony'] },
@@ -93,9 +95,6 @@ export const STANDARD_COLUMNS: StandardColumn[] = [
   { field: 'pf_sale_prices', label: 'PF Sale Prices', type: 'currency', group: 'Portals', autoMatchHints: ['pf sale price'] },
   { field: 'bayut_links', label: 'Bayut Links', type: 'url', group: 'Portals', autoMatchHints: ['bayut link'] },
   { field: 'pf_links', label: 'PF Links', type: 'url', group: 'Portals', autoMatchHints: ['pf link'] },
-
-  // Portal / Listing
-  { field: 'portal_bedrooms', label: 'Portal Bedrooms', type: 'text', group: 'Portals', autoMatchHints: ['portal bedroom', 'portal bed'] },
 
   // Area
   { field: 'plot_area', label: 'Plot Area', type: 'number', group: 'Property', autoMatchHints: ['plot area', 'plot_area'] },
