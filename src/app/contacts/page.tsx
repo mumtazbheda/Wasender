@@ -33,6 +33,9 @@ interface Contact {
   zoha_email_feedback_1: string;
   zoha_email_feedback_2: string;
   zoha_email_feedback_3: string;
+  asma_feedback_1: string;
+  asma_feedback_2: string;
+  asma_feedback_3: string;
   status: string;
   latest_transaction_date: string;
   latest_transaction_amount: string;
@@ -215,6 +218,9 @@ const EDIT_FIELD_GROUPS = [
       { key: "zoha_feedback_1", label: "Zoha Feedback 1" },
       { key: "zoha_feedback_2", label: "Zoha Feedback 2" },
       { key: "zoha_feedback_3", label: "Zoha Feedback 3" },
+      { key: "asma_feedback_1", label: "Asma Feedback 1" },
+      { key: "asma_feedback_2", label: "Asma Feedback 2" },
+      { key: "asma_feedback_3", label: "Asma Feedback 3" },
     ],
   },
   {
@@ -312,6 +318,9 @@ export default function ContactsPage() {
     zoha_feedback_1: [] as string[],
     zoha_feedback_2: [] as string[],
     zoha_feedback_3: [] as string[],
+    asma_feedback_1: [] as string[],
+    asma_feedback_2: [] as string[],
+    asma_feedback_3: [] as string[],
     owner1Mobile: '' as string,
     owner2Mobile: '' as string,
     owner3Mobile: '' as string,
@@ -589,6 +598,9 @@ export default function ContactsPage() {
         mf(filters.zoha_feedback_1, contact.zoha_feedback_1) &&
         mf(filters.zoha_feedback_2, contact.zoha_feedback_2) &&
         mf(filters.zoha_feedback_3, contact.zoha_feedback_3) &&
+        mf(filters.asma_feedback_1, contact.asma_feedback_1) &&
+        mf(filters.asma_feedback_2, contact.asma_feedback_2) &&
+        mf(filters.asma_feedback_3, contact.asma_feedback_3) &&
         (!filters.owner1Mobile ||
           (filters.owner1Mobile === 'blank' && (!contact.owner1_mobile || String(contact.owner1_mobile).trim() === '')) ||
           (filters.owner1Mobile === 'zero' && String(contact.owner1_mobile || '').trim() === '0') ||
@@ -1262,6 +1274,26 @@ export default function ContactsPage() {
                 selected={filters.zoha_feedback_3}
                 onChange={(vals) => setFilters({ ...filters, zoha_feedback_3: vals })}
               />
+
+              {/* Asma Feedback Filters */}
+              <MultiSelectDropdown
+                label="Asma Feedback 1"
+                options={getUniqueValues("asma_feedback_1")}
+                selected={filters.asma_feedback_1}
+                onChange={(vals) => setFilters({ ...filters, asma_feedback_1: vals })}
+              />
+              <MultiSelectDropdown
+                label="Asma Feedback 2"
+                options={getUniqueValues("asma_feedback_2")}
+                selected={filters.asma_feedback_2}
+                onChange={(vals) => setFilters({ ...filters, asma_feedback_2: vals })}
+              />
+              <MultiSelectDropdown
+                label="Asma Feedback 3"
+                options={getUniqueValues("asma_feedback_3")}
+                selected={filters.asma_feedback_3}
+                onChange={(vals) => setFilters({ ...filters, asma_feedback_3: vals })}
+              />
             </div>
 
             {/* Owner Mobile Filters */}
@@ -1524,6 +1556,9 @@ export default function ContactsPage() {
                   <LabelValue label="Zoha Email Feedback 1" value={selectedContact.zoha_email_feedback_1 || "—"} />
                   <LabelValue label="Zoha Email Feedback 2" value={selectedContact.zoha_email_feedback_2 || "—"} />
                   <LabelValue label="Zoha Email Feedback 3" value={selectedContact.zoha_email_feedback_3 || "—"} />
+                  <LabelValue label="Asma Feedback 1" value={selectedContact.asma_feedback_1 || "—"} />
+                  <LabelValue label="Asma Feedback 2" value={selectedContact.asma_feedback_2 || "—"} />
+                  <LabelValue label="Asma Feedback 3" value={selectedContact.asma_feedback_3 || "—"} />
                 </ViewSection>
                 <ViewSection title="📁 Other" isOpen={openSections['other'] !== false} onToggle={() => toggleSection('other')}>
                   <LabelValue label="Furnishing" value={selectedContact.furnishing || "—"} />

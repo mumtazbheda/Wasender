@@ -134,6 +134,29 @@ export async function initializeDatabase() {
       synced_at TIMESTAMP DEFAULT NOW()
     )
   `;
+
+  // Column mappings: maps sheet tab + source header -> standard field key
+  await sql`
+    CREATE TABLE IF NOT EXISTS column_mappings (
+      id SERIAL PRIMARY KEY,
+      sheet_tab TEXT NOT NULL,
+      source_header TEXT NOT NULL,
+      standard_field TEXT NOT NULL,
+      created_at TIMESTAMP DEFAULT NOW(),
+      UNIQUE(sheet_tab, source_header)
+    )
+  `;
+
+  // Custom columns: user-defined columns beyond the standard set
+  await sql`
+    CREATE TABLE IF NOT EXISTS custom_columns (
+      id SERIAL PRIMARY KEY,
+      field_key TEXT UNIQUE NOT NULL,
+      display_name TEXT NOT NULL,
+      column_type TEXT NOT NULL DEFAULT 'text',
+      created_at TIMESTAMP DEFAULT NOW()
+    )
+  `;
 }
 
 export { sql };

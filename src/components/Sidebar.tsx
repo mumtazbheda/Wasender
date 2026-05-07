@@ -21,6 +21,7 @@ const Sidebar = () => {
     { name: "Templates", path: "/templates", icon: "📝" },
     { name: "Messages", path: "/messages", icon: "💬" },
     { name: "Replies Inbox", path: "/inbox", icon: "📥" },
+    { name: "Column Mappings", path: "/column-mappings", icon: "🗂️" },
   ];
 
   return (

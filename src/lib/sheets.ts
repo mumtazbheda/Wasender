@@ -29,6 +29,9 @@ export interface Contact {
   zoha_email_feedback_1: string;
   zoha_email_feedback_2: string;
   zoha_email_feedback_3: string;
+  asma_feedback_1: string;
+  asma_feedback_2: string;
+  asma_feedback_3: string;
   status: string;
   latest_transaction_date: string;
   latest_transaction_amount: string;
@@ -105,6 +108,9 @@ function detectColumns(headers: string[]) {
     zoha_email_feedback_1: findByName(["zoha email feedback 1", "zoha email"]),
     zoha_email_feedback_2: findByName(["zoha email feedback 2"]),
     zoha_email_feedback_3: findByName(["zoha email feedback 3"]),
+    asma_feedback_1: findByName(["asma feedback 1", "asma feedback"]),
+    asma_feedback_2: findByName(["asma feedback 2"]),
+    asma_feedback_3: findByName(["asma feedback 3"]),
     status: findByName(["status"]),
     latest_transaction_date: findByName(["latest transaction date", "transaction date"]),
     latest_transaction_amount: findByName(["latest transaction amount", "transaction amount"]),
@@ -226,6 +232,9 @@ export async function fetchContactData(
       zoha_email_feedback_1: getStringValue(columnIndices.zoha_email_feedback_1),
       zoha_email_feedback_2: getStringValue(columnIndices.zoha_email_feedback_2),
       zoha_email_feedback_3: getStringValue(columnIndices.zoha_email_feedback_3),
+      asma_feedback_1: getStringValue(columnIndices.asma_feedback_1),
+      asma_feedback_2: getStringValue(columnIndices.asma_feedback_2),
+      asma_feedback_3: getStringValue(columnIndices.asma_feedback_3),
       status: getStringValue(columnIndices.status),
       latest_transaction_date: getStringValue(columnIndices.latest_transaction_date),
       latest_transaction_amount: getStringValue(columnIndices.latest_transaction_amount),
@@ -318,8 +327,14 @@ export function getFeedbackColumnIndices(headers: string[], accountName: string)
       2: findCol('zoha feedback 2'),
       3: findCol('zoha feedback 3'),
     };
+  } else if (name.includes('asma')) {
+    return {
+      1: findCol('asma feedback 1'),
+      2: findCol('asma feedback 2'),
+      3: findCol('asma feedback 3'),
+    };
   }
-  
+
   // Default: try to find generic feedback columns
   return {
     1: findCol('feedback 1'),
