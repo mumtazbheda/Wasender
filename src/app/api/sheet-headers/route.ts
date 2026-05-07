@@ -1,11 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
-import { getSheetHeadersWithAuth } from '@/lib/sheets';
+import { getSheetHeadersWithAuth, detectColumns } from '@/lib/sheets';
 import { autoMatchHeader } from '@/lib/standard-columns';
 
 // GET /api/sheet-headers?sheetTab=xxx
 // Returns headers + auto-matched standard fields for mapping UI
+// Add ?debug=true to also return full detectColumns mapping
 export async function GET(request: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
@@ -31,7 +32,22 @@ export async function GET(request: NextRequest) {
       autoMatch: autoMatchHeader(header),
     }));
 
-    return NextResponse.json({ success: true, headers: headerMatches });
+    // Debug mode: also return detectColumns result (field → header name it resolved to)
+    const isDebug = request.nextUrl.searchParams.get('debug') === 'true';
+    let detectResult: Record<string, { index: number; header: string | null }> | undefined;
+    if (isDebug) {
+      const indices = detectColumns(headers);
+      detectResult = {} as Record<string, { index: number; header: string | null }>;
+      for (const [field, idx] of Object.entries(indices)) {
+        detectResult[field] = { index: idx, header: idx >= 0 ? headers[idx] : null };
+      }
+    }
+
+    return NextResponse.json({
+      success: true,
+      headers: headerMatches,
+      ...(isDebug ? { detectColumns: detectResult } : {}),
+    });
   } catch (error: any) {
     return NextResponse.json({ success: false, error: error.message }, { status: 500 });
   }

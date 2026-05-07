@@ -80,7 +80,7 @@ function getSheetsClient(accessToken: string) {
   return google.sheets({ version: "v4", auth });
 }
 
-function detectColumns(headers: string[]) {
+export function detectColumns(headers: string[]) {
   const h = headers.map((x) => x.toString().trim().toLowerCase());
   const findByName = (names: string[]) =>
     h.findIndex((x) => names.some((n) => x.includes(n.toLowerCase())));
