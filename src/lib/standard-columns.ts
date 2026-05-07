@@ -11,9 +11,9 @@ export interface StandardColumn {
 export const STANDARD_COLUMNS: StandardColumn[] = [
   // Property Info
   { field: 'unit', label: 'Unit', type: 'text', group: 'Property', autoMatchHints: ['unit'] },
-  // portal_bedrooms must be listed BEFORE rooms_en so "Portal Bedrooms" header matches it first
-  { field: 'portal_bedrooms', label: 'Portal Bedrooms', type: 'text', group: 'Portals', autoMatchHints: ['portal bedroom', 'portal bed', 'bedrooms'] },
-  { field: 'rooms_en', label: 'Rooms', type: 'text', group: 'Property', autoMatchHints: ['rooms', 'rooms_en'] },
+  // portal_bedrooms must be listed BEFORE rooms_en so "Portal Bedrooms" matches it first
+  { field: 'portal_bedrooms', label: 'Portal Bedrooms', type: 'text', group: 'Portals', autoMatchHints: ['portal bedroom', 'portal bed', 'portal rooms'] },
+  { field: 'rooms_en', label: 'Rooms', type: 'text', group: 'Property', autoMatchHints: ['rooms_en', 'rooms', 'bedrooms', 'beds', 'bed'] },
   { field: 'actual_area', label: 'Actual Area', type: 'number', group: 'Property', autoMatchHints: ['actual area', 'actual_area'] },
   { field: 'unit_balcony_area', label: 'Balcony Area', type: 'number', group: 'Property', autoMatchHints: ['balcony area', 'unit balcony', 'balcony'] },
   { field: 'unit_parking_number', label: 'Parking Number', type: 'text', group: 'Property', autoMatchHints: ['parking'] },

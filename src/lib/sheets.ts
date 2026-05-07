@@ -96,7 +96,14 @@ function detectColumns(headers: string[]) {
     owner3_name: findByName(["owner 3"]),
     owner3_mobile: findByName(["owner 3 mobile", "owner 3 contact"]),
     owner3_email: findByName(["owner 3 email"]),
-    rooms_en: h.findIndex(x => (x.includes('rooms') || x.includes('rooms_en')) && !x.includes('bedroom')),
+    // Rooms/Bedrooms/Beds → rooms_en, UNLESS header also contains "portal" (then it's portal_bedrooms)
+    rooms_en: h.findIndex(x =>
+      (x.includes('rooms') || x.includes('rooms_en') || x.includes('bedrooms') || x === 'beds' || x === 'bed' || x.endsWith(' beds') || x.endsWith(' bed'))
+      && !x.includes('portal')
+    ),
+    portal_bedrooms: h.findIndex(x =>
+      x.includes('portal') && (x.includes('bedroom') || x.includes('rooms') || x.includes('bed'))
+    ),
     actual_area: findByName(["actual area", "actual_area"]),
     unit_balcony_area: findByName(["unit balcony", "balcony area", "balcony"]),
     unit_parking_number: findByName(["parking"]),
@@ -152,7 +159,6 @@ function detectColumns(headers: string[]) {
     pf_sale_prices: findByName(["pf sale price"]),
     bayut_links: findByName(["bayut link"]),
     pf_links: findByName(["pf link"]),
-    portal_bedrooms: findByName(["portal bedroom", "portal bed"]),
     plot_area: findByName(["plot area", "plot_area"]),
     built_up_area: findByName(["built up area", "built-up area", "built_up_area", "bua"]),
     permit_number: findByName(["permit number", "permit_number", "permit no"]),
