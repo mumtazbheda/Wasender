@@ -108,8 +108,9 @@ function detectColumns(headers: string[]) {
     unit_balcony_area: findByName(["unit balcony", "balcony area", "balcony"]),
     unit_parking_number: findByName(["parking"]),
     rent_end_date: findByName(["rent end", "end date"]),
-    listing_status: findByName(["listing status"]),
-    rental_contract_status: findByName(["rental contract", "contract status"]),
+    // listing_status: exclude "vam listing status" collision; accept underscore variant
+    listing_status: h.findIndex(x => (x.includes('listing status') || x.includes('listing_status')) && !x.includes('vam')),
+    rental_contract_status: findByName(["rental contract", "contract status", "rental_contract"]),
     purpose: findByName(["purpose"]),
     zoha_feedback_1: findByName(["zoha feedback 1", "zoha feedback"]),
     zoha_feedback_2: findByName(["zoha feedback 2"]),
@@ -123,7 +124,7 @@ function detectColumns(headers: string[]) {
     asma_feedback_1: findByName(["asma feedback 1", "asma feedback"]),
     asma_feedback_2: findByName(["asma feedback 2"]),
     asma_feedback_3: findByName(["asma feedback 3"]),
-    // "status" only — exclude all compound status columns (listing status, rental status, etc.)
+    // "status" bare column only — exclude all compound status column names
     status: h.findIndex(x => x.includes('status') && !x.includes('listing') && !x.includes('rental') && !x.includes('occupancy') && !x.includes('vacancy') && !x.includes('vam') && !x.includes('contract') && !x.includes('transaction')),
     latest_transaction_date: findByName(["latest transaction date", "transaction date"]),
     latest_transaction_amount: findByName(["latest transaction amount", "transaction amount"]),
@@ -134,13 +135,14 @@ function detectColumns(headers: string[]) {
     rental_status_date: findByName(["rental status date"]),
     rental_months_pending_expired: findByName(["months pending", "pending"]),
     furnishing: findByName(["furnish"]),
-    asking_sale_price: findByName(["sale price", "asking sale"]),
-    asking_rent_price: findByName(["rent price", "asking rent"]),
+    asking_sale_price: findByName(["sale price", "asking sale", "asking_sale"]),
+    asking_rent_price: findByName(["asking rent", "asking_rent"]),
     images: findByName(["images", "image"]),
     videos: findByName(["videos", "video"]),
     documents: findByName(["documents", "document"]),
     vacancy_status: findByName(["vacancy"]),
-    vam_listing_status: findByName(["vam", "vam status"]),
+    // vam_listing_status: match "vam listing status" or just "vam listing"
+    vam_listing_status: h.findIndex(x => x.includes('vam') && x.includes('listing')),
     listing_link: findByName(["listing link"]),
     owner_dob: findByName(["dob", "date of birth"]),
     crm_listing_link: findByName(["crm", "crm link"]),

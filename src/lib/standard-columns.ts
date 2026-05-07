@@ -49,11 +49,11 @@ export const STANDARD_COLUMNS: StandardColumn[] = [
   { field: 'available_from', label: 'Available From', type: 'date', group: 'Rental', autoMatchHints: ['available'] },
 
   // Listing Info
-  { field: 'listing_status', label: 'Listing Status', type: 'text', group: 'Listing', autoMatchHints: ['listing status'] },
+  { field: 'listing_status', label: 'Listing Status', type: 'text', group: 'Listing', autoMatchHints: ['listing status', 'listing_status'] },
   { field: 'purpose', label: 'Purpose', type: 'text', group: 'Listing', autoMatchHints: ['purpose'] },
-  { field: 'asking_sale_price', label: 'Asking Sale Price', type: 'currency', group: 'Listing', autoMatchHints: ['sale price', 'asking sale'] },
-  { field: 'asking_rent_price', label: 'Asking Rent Price', type: 'currency', group: 'Listing', autoMatchHints: ['asking rent'] },
-  { field: 'vam_listing_status', label: 'VAM Listing Status', type: 'text', group: 'Listing', autoMatchHints: ['vam', 'vam status'] },
+  { field: 'asking_sale_price', label: 'Asking Sale Price', type: 'currency', group: 'Listing', autoMatchHints: ['sale price', 'asking sale', 'asking_sale'] },
+  { field: 'asking_rent_price', label: 'Asking Rent Price', type: 'currency', group: 'Listing', autoMatchHints: ['asking rent', 'asking_rent'] },
+  { field: 'vam_listing_status', label: 'VAM Listing Status', type: 'text', group: 'Listing', autoMatchHints: ['vam listing', 'vam_listing', 'vam status'] },
   { field: 'listing_link', label: 'Listing Link', type: 'url', group: 'Listing', autoMatchHints: ['listing link'] },
   { field: 'crm_listing_link', label: 'CRM Listing Link', type: 'url', group: 'Listing', autoMatchHints: ['crm', 'crm link'] },
 
