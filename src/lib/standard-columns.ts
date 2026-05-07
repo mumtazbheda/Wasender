@@ -12,7 +12,7 @@ export const STANDARD_COLUMNS: StandardColumn[] = [
   // Property Info
   { field: 'unit', label: 'Unit', type: 'text', group: 'Property', autoMatchHints: ['unit'] },
   // portal_bedrooms must be listed BEFORE rooms_en so "Portal Bedrooms" matches it first
-  { field: 'portal_bedrooms', label: 'Portal Bedrooms', type: 'text', group: 'Portals', autoMatchHints: ['portal bedroom', 'portal bed', 'portal rooms'] },
+  { field: 'portal_bedrooms', label: 'Portal Bedrooms', type: 'text', group: 'Portals', autoMatchHints: ['portal bedroom', 'portal bed'] },
   { field: 'rooms_en', label: 'Rooms', type: 'text', group: 'Property', autoMatchHints: ['rooms_en', 'rooms', 'bedrooms', 'beds', 'bed'] },
   { field: 'actual_area', label: 'Actual Area', type: 'number', group: 'Property', autoMatchHints: ['actual area', 'actual_area'] },
   { field: 'unit_balcony_area', label: 'Balcony Area', type: 'number', group: 'Property', autoMatchHints: ['balcony area', 'unit balcony', 'balcony'] },
@@ -49,38 +49,39 @@ export const STANDARD_COLUMNS: StandardColumn[] = [
   { field: 'available_from', label: 'Available From', type: 'date', group: 'Rental', autoMatchHints: ['available'] },
 
   // Listing Info
+  // vam_listing_status must be BEFORE listing_status so "VAM Listing Status" matches correctly
+  { field: 'vam_listing_status', label: 'VAM Listing Status', type: 'text', group: 'Listing', autoMatchHints: ['vam listing', 'vam_listing', 'vam status'] },
   { field: 'listing_status', label: 'Listing Status', type: 'text', group: 'Listing', autoMatchHints: ['listing status', 'listing_status'] },
   { field: 'purpose', label: 'Purpose', type: 'text', group: 'Listing', autoMatchHints: ['purpose'] },
-  { field: 'asking_sale_price', label: 'Asking Sale Price', type: 'currency', group: 'Listing', autoMatchHints: ['sale price', 'asking sale', 'asking_sale'] },
+  { field: 'asking_sale_price', label: 'Asking Sale Price', type: 'currency', group: 'Listing', autoMatchHints: ['asking sale', 'asking_sale', 'asking sale price'] },
   { field: 'asking_rent_price', label: 'Asking Rent Price', type: 'currency', group: 'Listing', autoMatchHints: ['asking rent', 'asking_rent'] },
-  { field: 'vam_listing_status', label: 'VAM Listing Status', type: 'text', group: 'Listing', autoMatchHints: ['vam listing', 'vam_listing', 'vam status'] },
   { field: 'listing_link', label: 'Listing Link', type: 'url', group: 'Listing', autoMatchHints: ['listing link'] },
   { field: 'crm_listing_link', label: 'CRM Listing Link', type: 'url', group: 'Listing', autoMatchHints: ['crm', 'crm link'] },
 
-  // Status
-  { field: 'status', label: 'Status', type: 'text', group: 'Status', autoMatchHints: ['status'] },
-  { field: 'occupancy_status', label: 'Occupancy Status', type: 'text', group: 'Status', autoMatchHints: ['occupancy'] },
+  // Status — specific compound statuses must come BEFORE bare 'status' to avoid autoMatch collision
   { field: 'vacancy_status', label: 'Vacancy Status', type: 'text', group: 'Status', autoMatchHints: ['vacancy'] },
+  { field: 'occupancy_status', label: 'Occupancy Status', type: 'text', group: 'Status', autoMatchHints: ['occupancy'] },
+  { field: 'status', label: 'Status', type: 'text', group: 'Status', autoMatchHints: ['status'] },
 
   // Transactions
   { field: 'latest_transaction_date', label: 'Latest Transaction Date', type: 'date', group: 'Transactions', autoMatchHints: ['latest transaction date', 'transaction date'] },
   { field: 'latest_transaction_amount', label: 'Latest Transaction Amount', type: 'currency', group: 'Transactions', autoMatchHints: ['latest transaction amount', 'transaction amount'] },
 
-  // Feedback - Zoha
-  { field: 'zoha_feedback_1', label: 'Zoha Feedback 1', type: 'text', group: 'Zoha Feedback', autoMatchHints: ['zoha feedback 1', 'zoha feedback'] },
+  // Feedback - Zoha (bare 'zoha' column maps to zoha_feedback_1)
+  { field: 'zoha_feedback_1', label: 'Zoha Feedback 1', type: 'text', group: 'Zoha Feedback', autoMatchHints: ['zoha feedback 1', 'zoha feedback', 'zoha'] },
   { field: 'zoha_feedback_2', label: 'Zoha Feedback 2', type: 'text', group: 'Zoha Feedback', autoMatchHints: ['zoha feedback 2'] },
   { field: 'zoha_feedback_3', label: 'Zoha Feedback 3', type: 'text', group: 'Zoha Feedback', autoMatchHints: ['zoha feedback 3'] },
   { field: 'zoha_email_feedback_1', label: 'Zoha Email Feedback 1', type: 'text', group: 'Zoha Feedback', autoMatchHints: ['zoha email feedback 1', 'zoha email'] },
   { field: 'zoha_email_feedback_2', label: 'Zoha Email Feedback 2', type: 'text', group: 'Zoha Feedback', autoMatchHints: ['zoha email feedback 2'] },
   { field: 'zoha_email_feedback_3', label: 'Zoha Email Feedback 3', type: 'text', group: 'Zoha Feedback', autoMatchHints: ['zoha email feedback 3'] },
 
-  // Feedback - Ahmed
-  { field: 'ahmed_feedback_1', label: 'Ahmed Feedback 1', type: 'text', group: 'Ahmed Feedback', autoMatchHints: ['ahmed feedback 1', 'ahmed feedback'] },
+  // Feedback - Ahmed (bare 'ahmed' column maps to ahmed_feedback_1)
+  { field: 'ahmed_feedback_1', label: 'Ahmed Feedback 1', type: 'text', group: 'Ahmed Feedback', autoMatchHints: ['ahmed feedback 1', 'ahmed feedback', 'ahmed'] },
   { field: 'ahmed_feedback_2', label: 'Ahmed Feedback 2', type: 'text', group: 'Ahmed Feedback', autoMatchHints: ['ahmed feedback 2'] },
   { field: 'ahmed_feedback_3', label: 'Ahmed Feedback 3', type: 'text', group: 'Ahmed Feedback', autoMatchHints: ['ahmed feedback 3'] },
 
-  // Feedback - Asma
-  { field: 'asma_feedback_1', label: 'Asma Feedback 1', type: 'text', group: 'Asma Feedback', autoMatchHints: ['asma feedback 1', 'asma feedback'] },
+  // Feedback - Asma (bare 'asma' column maps to asma_feedback_1)
+  { field: 'asma_feedback_1', label: 'Asma Feedback 1', type: 'text', group: 'Asma Feedback', autoMatchHints: ['asma feedback 1', 'asma feedback', 'asma'] },
   { field: 'asma_feedback_2', label: 'Asma Feedback 2', type: 'text', group: 'Asma Feedback', autoMatchHints: ['asma feedback 2'] },
   { field: 'asma_feedback_3', label: 'Asma Feedback 3', type: 'text', group: 'Asma Feedback', autoMatchHints: ['asma feedback 3'] },
 
