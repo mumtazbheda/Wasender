@@ -33,7 +33,15 @@ interface Contact {
   zoha_email_feedback_1: string;
   zoha_email_feedback_2: string;
   zoha_email_feedback_3: string;
+  asma_feedback_1: string;
+  asma_feedback_2: string;
+  asma_feedback_3: string;
   status: string;
+  portal_bedrooms: string;
+  plot_area: number;
+  built_up_area: number;
+  permit_number: string;
+  comment: string;
   latest_transaction_date: string;
   latest_transaction_amount: string;
   occupancy_status: string;
@@ -105,14 +113,21 @@ export default function CampaignsPage() {
   const [filters, setFilters] = useState({
     purpose: [] as string[],
     rooms: [] as string[],
+    portal_bedrooms: [] as string[],
     listing_status: [] as string[],
     rental_contract_status: [] as string[],
+    furnishing: [] as string[],
+    vacancy_status: [] as string[],
+    vam_listing_status: [] as string[],
     ahmed_feedback_1: [] as string[],
     ahmed_feedback_2: [] as string[],
     ahmed_feedback_3: [] as string[],
     zoha_feedback_1: [] as string[],
     zoha_feedback_2: [] as string[],
     zoha_feedback_3: [] as string[],
+    asma_feedback_1: [] as string[],
+    asma_feedback_2: [] as string[],
+    asma_feedback_3: [] as string[],
     owner1Mobile: '' as string,
     owner2Mobile: '' as string,
     owner3Mobile: '' as string,
@@ -126,6 +141,18 @@ export default function CampaignsPage() {
   const [delayMin, setDelayMin] = useState(10);
   const [delayMax, setDelayMax] = useState(45);
   const [delayUnit, setDelayUnit] = useState('seconds');
+
+  // Batch sending settings
+  const [batchSize, setBatchSize] = useState(0);
+  const [batchWaitMinutes, setBatchWaitMinutes] = useState(0);
+
+  // Dedup warning (7-day recent message check)
+  const [dedupWarning, setDedupWarning] = useState<{
+    count: number;
+    latestRun: string;
+    recentPhones: string[];
+  } | null>(null);
+  const [dedupChecking, setDedupChecking] = useState(false);
 
   // Account selection
   const [accounts, setAccounts] = useState<any[]>([]);
@@ -388,14 +415,21 @@ export default function CampaignsPage() {
       const matchFilters =
         matchFilter(filters.purpose, contact.purpose) &&
         matchFilter(filters.rooms, contact.rooms_en) &&
+        matchFilter(filters.portal_bedrooms, contact.portal_bedrooms) &&
         matchFilter(filters.listing_status, contact.listing_status) &&
         matchFilter(filters.rental_contract_status, contact.rental_contract_status) &&
+        matchFilter(filters.furnishing, contact.furnishing) &&
+        matchFilter(filters.vacancy_status, contact.vacancy_status) &&
+        matchFilter(filters.vam_listing_status, contact.vam_listing_status) &&
         matchFilter(filters.ahmed_feedback_1, contact.ahmed_feedback_1) &&
         matchFilter(filters.ahmed_feedback_2, contact.ahmed_feedback_2) &&
         matchFilter(filters.ahmed_feedback_3, contact.ahmed_feedback_3) &&
         matchFilter(filters.zoha_feedback_1, contact.zoha_feedback_1) &&
         matchFilter(filters.zoha_feedback_2, contact.zoha_feedback_2) &&
         matchFilter(filters.zoha_feedback_3, contact.zoha_feedback_3) &&
+        matchFilter(filters.asma_feedback_1, contact.asma_feedback_1) &&
+        matchFilter(filters.asma_feedback_2, contact.asma_feedback_2) &&
+        matchFilter(filters.asma_feedback_3, contact.asma_feedback_3) &&
         (!filters.owner1Mobile ||
           (filters.owner1Mobile === 'blank' && (!contact.owner1_mobile || String(contact.owner1_mobile).trim() === '')) ||
           (filters.owner1Mobile === 'zero' && String(contact.owner1_mobile || '').trim() === '0') ||
@@ -643,19 +677,62 @@ export default function CampaignsPage() {
     } catch {}
   };
 
-  const handleSendCampaign = async () => {
+  // Check if selected phones were recently messaged (7-day lookback)
+  const checkRecentMessages = async (skipWarning = false) => {
     if (!selectedAccountId || !selectedTemplate || selectedContacts.size === 0) return;
     if (!campaignName.trim()) {
       setSendStatus({ type: 'error', message: '❌ Please enter a campaign name' });
       return;
     }
+
+    if (!skipWarning) {
+      // Collect all phones from selected contacts
+      const selectedContactObjects = filteredContacts.filter(c => selectedContacts.has(c.rowIndex));
+      const phones: string[] = [];
+      for (const c of selectedContactObjects) {
+        if (c.owner1_mobile) phones.push(c.owner1_mobile.replace(/[^0-9]/g, ''));
+        if (c.owner2_mobile) phones.push(c.owner2_mobile.replace(/[^0-9]/g, ''));
+        if (c.owner3_mobile) phones.push(c.owner3_mobile.replace(/[^0-9]/g, ''));
+      }
+      const uniquePhones = [...new Set(phones.filter(Boolean))];
+
+      setDedupChecking(true);
+      try {
+        const res = await fetch('/api/check-recent-messages', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ phones: uniquePhones, lookbackDays: 7 }),
+        });
+        const data = await res.json();
+        setDedupChecking(false);
+        if (data.count > 0) {
+          setDedupWarning({
+            count: data.count,
+            latestRun: data.latestRun,
+            recentPhones: data.recent.map((r: any) => r.phone),
+          });
+          return; // Don't submit — show warning modal
+        }
+      } catch {
+        setDedupChecking(false);
+        // If check fails, proceed anyway
+      }
+    }
+
+    await submitCampaign();
+  };
+
+  const handleSendCampaign = () => checkRecentMessages(false);
+
+  const submitCampaign = async () => {
+    if (!selectedAccountId || !selectedTemplate || selectedContacts.size === 0) return;
     setSending(true);
     setSendStatus(null);
     try {
       const selectedTemplateData = templates.find(t => String(t.id) === String(selectedTemplate));
       const selectedContactObjects = filteredContacts.filter(c => selectedContacts.has(c.rowIndex));
       const selectedAccountData = accounts.find((a: any) => String(a.id) === selectedAccountId);
-      
+
       const res = await fetch('/api/send-campaign', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -671,6 +748,8 @@ export default function CampaignsPage() {
           delayMin,
           delayMax,
           delayUnit,
+          batchSize,
+          batchWaitMinutes,
           filtersUsed: JSON.stringify(filters),
         }),
       });
@@ -963,6 +1042,12 @@ export default function CampaignsPage() {
                   onChange={(vals) => setFilters({ ...filters, rooms: vals })}
                 />
                 <MultiSelectDropdown
+                  label="Portal Bedrooms"
+                  options={getUniqueValues("portal_bedrooms")}
+                  selected={filters.portal_bedrooms}
+                  onChange={(vals) => setFilters({ ...filters, portal_bedrooms: vals })}
+                />
+                <MultiSelectDropdown
                   label="Listing Status"
                   options={getUniqueValues("listing_status")}
                   selected={filters.listing_status}
@@ -973,6 +1058,24 @@ export default function CampaignsPage() {
                   options={getUniqueValues("rental_contract_status")}
                   selected={filters.rental_contract_status}
                   onChange={(vals) => setFilters({ ...filters, rental_contract_status: vals })}
+                />
+                <MultiSelectDropdown
+                  label="Furnishing"
+                  options={getUniqueValues("furnishing")}
+                  selected={filters.furnishing}
+                  onChange={(vals) => setFilters({ ...filters, furnishing: vals })}
+                />
+                <MultiSelectDropdown
+                  label="Vacancy Status"
+                  options={getUniqueValues("vacancy_status")}
+                  selected={filters.vacancy_status}
+                  onChange={(vals) => setFilters({ ...filters, vacancy_status: vals })}
+                />
+                <MultiSelectDropdown
+                  label="VAM Listing Status"
+                  options={getUniqueValues("vam_listing_status")}
+                  selected={filters.vam_listing_status}
+                  onChange={(vals) => setFilters({ ...filters, vam_listing_status: vals })}
                 />
                 <MultiSelectDropdown
                   label="Ahmed Feedback 1"
@@ -1009,6 +1112,24 @@ export default function CampaignsPage() {
                   options={getUniqueValues("zoha_feedback_3")}
                   selected={filters.zoha_feedback_3}
                   onChange={(vals) => setFilters({ ...filters, zoha_feedback_3: vals })}
+                />
+                <MultiSelectDropdown
+                  label="Asma Feedback 1"
+                  options={getUniqueValues("asma_feedback_1")}
+                  selected={filters.asma_feedback_1}
+                  onChange={(vals) => setFilters({ ...filters, asma_feedback_1: vals })}
+                />
+                <MultiSelectDropdown
+                  label="Asma Feedback 2"
+                  options={getUniqueValues("asma_feedback_2")}
+                  selected={filters.asma_feedback_2}
+                  onChange={(vals) => setFilters({ ...filters, asma_feedback_2: vals })}
+                />
+                <MultiSelectDropdown
+                  label="Asma Feedback 3"
+                  options={getUniqueValues("asma_feedback_3")}
+                  selected={filters.asma_feedback_3}
+                  onChange={(vals) => setFilters({ ...filters, asma_feedback_3: vals })}
                 />
               </div>
 
@@ -1146,6 +1267,63 @@ export default function CampaignsPage() {
               >
                 Next: Select Template ({selectedContacts.size} selected)
               </button>
+            </div>
+          )}
+
+          {/* Dedup Warning Modal (recent messages in last 7 days) */}
+          {dedupWarning && (
+            <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+              <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6">
+                <div className="flex items-center gap-3 mb-4">
+                  <span className="text-3xl">⚠️</span>
+                  <h2 className="text-xl font-bold text-gray-900">Recent Messages Detected</h2>
+                </div>
+                <p className="text-gray-700 mb-2">
+                  <span className="font-bold text-orange-600">{dedupWarning.count} number{dedupWarning.count !== 1 ? 's' : ''}</span> in your selection were already messaged in the last 7 days.
+                </p>
+                {dedupWarning.latestRun && (
+                  <div className="bg-orange-50 border border-orange-200 rounded-lg px-4 py-3 mb-4">
+                    <p className="text-sm text-orange-800 font-medium">
+                      Most recent send: {new Date(dedupWarning.latestRun).toLocaleString()}
+                    </p>
+                  </div>
+                )}
+                <p className="text-gray-600 text-sm mb-6">
+                  Sending again may feel repetitive to the recipient. Would you like to include them or skip them?
+                </p>
+                <div className="flex flex-col gap-3">
+                  <button
+                    onClick={() => { setDedupWarning(null); void submitCampaign(); }}
+                    className="w-full py-3 bg-orange-500 hover:bg-orange-600 text-white rounded-xl font-bold transition"
+                  >
+                    Include all — send to everyone
+                  </button>
+                  <button
+                    onClick={() => {
+                      // Remove recently-messaged contacts from selection
+                      const recentSet = new Set(dedupWarning.recentPhones);
+                      const toRemove = new Set<number>();
+                      for (const c of filteredContacts) {
+                        const phones = [c.owner1_mobile, c.owner2_mobile, c.owner3_mobile]
+                          .map(p => (p || '').replace(/[^0-9]/g, ''));
+                        if (phones.some(p => p && recentSet.has(p))) toRemove.add(c.rowIndex);
+                      }
+                      setSelectedContacts(prev => new Set([...prev].filter(r => !toRemove.has(r))));
+                      setDedupWarning(null);
+                      setSendStatus({ type: 'success', message: `ℹ️ Removed ${toRemove.size} recently-contacted contact(s) from selection.` });
+                    }}
+                    className="w-full py-3 bg-green-600 hover:bg-green-700 text-white rounded-xl font-bold transition"
+                  >
+                    Skip the {dedupWarning.count} recent — send to the rest only
+                  </button>
+                  <button
+                    onClick={() => setDedupWarning(null)}
+                    className="w-full py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-xl font-semibold transition"
+                  >
+                    Cancel — go back
+                  </button>
+                </div>
+              </div>
             </div>
           )}
 
@@ -1554,6 +1732,45 @@ export default function CampaignsPage() {
               </p>
             </div>
 
+            {/* Batch Sending */}
+            <div className="border-t pt-6">
+              <label className="block text-lg font-bold text-gray-900 mb-2">📦 Batch Sending (Optional)</label>
+              <p className="text-sm text-gray-500 mb-3">
+                Send X messages, pause for Y minutes, then send the next batch. Leave at 0 to disable (send continuously with only the delay above).
+              </p>
+              <div className="flex gap-4 items-end flex-wrap">
+                <div>
+                  <label className="block text-xs text-gray-500 mb-1 font-medium">Messages per batch</label>
+                  <input
+                    type="number"
+                    min={0}
+                    value={batchSize || ''}
+                    onChange={(e) => setBatchSize(parseInt(e.target.value) || 0)}
+                    placeholder="0 = disabled"
+                    className="w-36 px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 font-medium"
+                  />
+                </div>
+                <div className="text-2xl text-gray-400 pb-3">→ wait</div>
+                <div>
+                  <label className="block text-xs text-gray-500 mb-1 font-medium">Minutes to wait</label>
+                  <input
+                    type="number"
+                    min={0}
+                    value={batchWaitMinutes || ''}
+                    onChange={(e) => setBatchWaitMinutes(parseInt(e.target.value) || 0)}
+                    placeholder="0 = disabled"
+                    className="w-36 px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 font-medium"
+                  />
+                </div>
+                <div className="text-2xl text-gray-400 pb-3">→ repeat</div>
+              </div>
+              {batchSize > 0 && batchWaitMinutes > 0 && (
+                <p className="text-xs text-green-700 font-medium mt-2 bg-green-50 px-3 py-2 rounded-lg">
+                  ✅ Will send {batchSize} messages, then pause {batchWaitMinutes} minutes, then send next {batchSize}, and so on.
+                </p>
+              )}
+            </div>
+
             {/* Schedule Option */}
             <div className="border-t pt-6">
               <div className="flex items-center gap-3 mb-4">
@@ -1593,6 +1810,9 @@ export default function CampaignsPage() {
                 <p>📧 Messages to send: <span className="font-bold">{selectedContacts.size}</span></p>
                 <p>⏱️ Initial delay: <span className="font-bold">{delayBefore} {delayUnit}</span></p>
                 <p>⏳ Between messages: <span className="font-bold">{delayMin}–{delayMax} {delayUnit} (random)</span></p>
+                {batchSize > 0 && batchWaitMinutes > 0 && (
+                  <p>📦 Batch: <span className="font-bold">{batchSize} msgs → pause {batchWaitMinutes} min → repeat</span></p>
+                )}
                 <p>⏰ Estimated duration: <span className="font-bold">{calculateEstimatedDuration()}</span></p>
                 {scheduleEnabled && scheduledDate && (
                   <p>📅 Scheduled for: <span className="font-bold">{scheduledDate} {scheduledTime}</span></p>
@@ -1784,10 +2004,10 @@ export default function CampaignsPage() {
             </button>
             <button
               onClick={handleSendCampaign}
-              disabled={sending || !selectedAccountId || selectedContacts.size === 0}
+              disabled={sending || dedupChecking || !selectedAccountId || selectedContacts.size === 0}
               className="flex-1 px-6 py-3 bg-green-600 hover:bg-green-700 disabled:bg-gray-400 text-white rounded-lg transition font-bold text-lg"
             >
-              {sending ? '⏳ Sending Campaign...' : `🚀 Send to ${dedupPhones.size} Unique Numbers`}
+              {dedupChecking ? '🔍 Checking recent messages...' : sending ? '⏳ Sending Campaign...' : `🚀 Send to ${dedupPhones.size} Unique Numbers`}
             </button>
           </div>
         </div>

@@ -67,6 +67,11 @@ export interface Contact {
   pf_sale_prices: string;
   bayut_links: string;
   pf_links: string;
+  portal_bedrooms: string;
+  plot_area: number;
+  built_up_area: number;
+  permit_number: string;
+  comment: string;
 }
 
 function getSheetsClient(accessToken: string) {
@@ -146,6 +151,11 @@ function detectColumns(headers: string[]) {
     pf_sale_prices: findByName(["pf sale price"]),
     bayut_links: findByName(["bayut link"]),
     pf_links: findByName(["pf link"]),
+    portal_bedrooms: findByName(["portal bedroom", "portal bed"]),
+    plot_area: findByName(["plot area", "plot_area"]),
+    built_up_area: findByName(["built up area", "built-up area", "built_up_area", "bua"]),
+    permit_number: findByName(["permit number", "permit_number", "permit no"]),
+    comment: findByName(["comment"]),
   };
 }
 
@@ -270,6 +280,11 @@ export async function fetchContactData(
       pf_sale_prices: getStringValue(columnIndices.pf_sale_prices),
       bayut_links: getStringValue(columnIndices.bayut_links),
       pf_links: getStringValue(columnIndices.pf_links),
+      portal_bedrooms: getStringValue(columnIndices.portal_bedrooms),
+      plot_area: getNumberValue(columnIndices.plot_area),
+      built_up_area: getNumberValue(columnIndices.built_up_area),
+      permit_number: getStringValue(columnIndices.permit_number),
+      comment: getStringValue(columnIndices.comment),
     });
   }
 

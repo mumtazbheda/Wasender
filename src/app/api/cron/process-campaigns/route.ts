@@ -102,7 +102,9 @@ export async function GET(request: NextRequest) {
     // 2. Get all in_progress campaigns
     const campaigns = await sql`
       SELECT cr.id, cr.name, cr.account_id, cr.delay_min, cr.delay_between,
-             wa.api_key, wa.account_type, wa.phone_number_id
+             cr.batch_size, cr.batch_wait_minutes,
+             wa.api_key, wa.account_type, wa.phone_number_id, wa.name as account_name,
+             cr.sheet_tab, cr.account_name as camp_account_name
       FROM campaign_runs cr
       JOIN wa_accounts wa ON cr.account_id = wa.id
       WHERE cr.status = 'in_progress'
@@ -124,6 +126,25 @@ export async function GET(request: NextRequest) {
     for (const campaign of campaigns.rows) {
       const cid = campaign.id;
       const delaySeconds = Math.max(5, parseInt(String(campaign.delay_min || 30)));
+
+      // Check batch limit: if batch_size set, count messages sent in last batch_wait_minutes window
+      const batchSize = parseInt(String(campaign.batch_size || 0));
+      const batchWaitMin = parseInt(String(campaign.batch_wait_minutes || 0));
+      if (batchSize > 0 && batchWaitMin > 0) {
+        const windowStart = new Date(Date.now() - batchWaitMin * 60 * 1000).toISOString();
+        const batchCount = await sql`
+          SELECT COUNT(*) as cnt
+          FROM campaign_messages
+          WHERE campaign_id = ${cid}
+            AND status IN ('sent', 'failed')
+            AND sent_at > ${windowStart}
+        `;
+        const cnt = parseInt(batchCount.rows[0].cnt);
+        if (cnt >= batchSize) {
+          log.push(`Campaign ${cid} (${campaign.name}): batch pause — ${cnt}/${batchSize} sent in last ${batchWaitMin}m`);
+          continue;
+        }
+      }
 
       // Get last sent time for this campaign
       const lastSentRow = await sql`

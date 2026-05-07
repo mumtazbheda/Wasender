@@ -94,6 +94,17 @@ export const STANDARD_COLUMNS: StandardColumn[] = [
   { field: 'bayut_links', label: 'Bayut Links', type: 'url', group: 'Portals', autoMatchHints: ['bayut link'] },
   { field: 'pf_links', label: 'PF Links', type: 'url', group: 'Portals', autoMatchHints: ['pf link'] },
 
+  // Portal / Listing
+  { field: 'portal_bedrooms', label: 'Portal Bedrooms', type: 'text', group: 'Portals', autoMatchHints: ['portal bedroom', 'portal bed'] },
+
+  // Area
+  { field: 'plot_area', label: 'Plot Area', type: 'number', group: 'Property', autoMatchHints: ['plot area', 'plot_area'] },
+  { field: 'built_up_area', label: 'Built-up Area (BUA)', type: 'number', group: 'Property', autoMatchHints: ['built up area', 'built-up area', 'built_up_area', 'bua'] },
+
+  // Admin
+  { field: 'permit_number', label: 'Permit Number', type: 'text', group: 'Other', autoMatchHints: ['permit number', 'permit_number', 'permit no'] },
+  { field: 'comment', label: 'Comment', type: 'text', group: 'Other', autoMatchHints: ['comment'] },
+
   // Other
   { field: 'owner_dob', label: 'Owner DOB', type: 'date', group: 'Other', autoMatchHints: ['dob', 'date of birth'] },
   { field: 'images', label: 'Images', type: 'url', group: 'Other', autoMatchHints: ['images', 'image'] },

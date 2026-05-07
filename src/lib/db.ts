@@ -91,6 +91,8 @@ export async function initializeDatabase() {
   await sql`ALTER TABLE campaign_runs ADD COLUMN IF NOT EXISTS total_unique_phones INTEGER DEFAULT 0`;
   await sql`ALTER TABLE campaign_runs ADD COLUMN IF NOT EXISTS duplicates_removed INTEGER DEFAULT 0`;
   await sql`ALTER TABLE campaign_runs ADD COLUMN IF NOT EXISTS delay_min INTEGER DEFAULT 5`;
+  await sql`ALTER TABLE campaign_runs ADD COLUMN IF NOT EXISTS batch_size INTEGER DEFAULT 0`;
+  await sql`ALTER TABLE campaign_runs ADD COLUMN IF NOT EXISTS batch_wait_minutes INTEGER DEFAULT 0`;
 
   // Campaign Messages Log - enhanced with owner_num tracking
   await sql`

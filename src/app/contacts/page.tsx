@@ -71,6 +71,11 @@ interface Contact {
   pf_sale_prices: string;
   bayut_links: string;
   pf_links: string;
+  portal_bedrooms: string;
+  plot_area: number;
+  built_up_area: number;
+  permit_number: string;
+  comment: string;
 }
 
 interface Template {

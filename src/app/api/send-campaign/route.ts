@@ -94,7 +94,8 @@ export async function POST(request: NextRequest) {
     const {
       campaignName, contacts, templateName, templateBody,
       accountId, accountName, sheetTab,
-      delayBefore, delayMin: rawDelayMin, delayMax: rawDelayMax, delayUnit, filtersUsed
+      delayBefore, delayMin: rawDelayMin, delayMax: rawDelayMax, delayUnit, filtersUsed,
+      batchSize: rawBatchSize, batchWaitMinutes: rawBatchWait,
     } = body;
 
     if (!contacts?.length || !templateBody || !accountId) {
@@ -114,11 +115,13 @@ export async function POST(request: NextRequest) {
     const toSeconds = (v: number) => unit === 'minutes' ? v * 60 : unit === 'hours' ? v * 3600 : v;
     const delayMin = Math.max(1, toSeconds(parseInt(String(rawDelayMin || 10))));
     const delayMax = Math.max(delayMin, toSeconds(parseInt(String(rawDelayMax || 45))));
+    const batchSize = Math.max(0, parseInt(String(rawBatchSize || 0)));
+    const batchWaitMinutes = Math.max(0, parseInt(String(rawBatchWait || 0)));
 
     // Create campaign record
     const campaignResult = await sql`
-      INSERT INTO campaign_runs (name, account_id, account_name, template_name, template_body, sheet_tab, total_contacts, total_unique_phones, duplicates_removed, status, filters_used, delay_before, delay_min, delay_between, delay_unit, randomize_delay, started_at)
-      VALUES (${campaignName || 'Unnamed Campaign'}, ${parseInt(accountId)}, ${accountName || account.name || ''}, ${templateName || 'Unnamed'}, ${templateBody}, ${sheetTab || ''}, ${contacts.length}, ${uniquePhones.length}, ${duplicates}, 'in_progress', ${filtersUsed || ''}, ${delayBefore || 0}, ${delayMin}, ${delayMax}, ${delayUnit || 'seconds'}, true, NOW())
+      INSERT INTO campaign_runs (name, account_id, account_name, template_name, template_body, sheet_tab, total_contacts, total_unique_phones, duplicates_removed, status, filters_used, delay_before, delay_min, delay_between, delay_unit, randomize_delay, batch_size, batch_wait_minutes, started_at)
+      VALUES (${campaignName || 'Unnamed Campaign'}, ${parseInt(accountId)}, ${accountName || account.name || ''}, ${templateName || 'Unnamed'}, ${templateBody}, ${sheetTab || ''}, ${contacts.length}, ${uniquePhones.length}, ${duplicates}, 'in_progress', ${filtersUsed || ''}, ${delayBefore || 0}, ${delayMin}, ${delayMax}, ${delayUnit || 'seconds'}, true, ${batchSize}, ${batchWaitMinutes}, NOW())
       RETURNING id
     `;
     const campaignId = campaignResult.rows[0].id;
