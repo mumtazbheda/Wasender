@@ -38,10 +38,10 @@ export async function GET(request: NextRequest) {
 
     const contacts = await fetchContactData(accessToken, sheetName, savedMappings);
 
-    return NextResponse.json({
-      success: true,
-      contacts: contacts,
-    });
+    return NextResponse.json(
+      { success: true, contacts },
+      { headers: { 'Cache-Control': 'no-store, no-cache, must-revalidate' } }
+    );
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown error";
     return NextResponse.json({ success: false, error: message }, { status: 500 });

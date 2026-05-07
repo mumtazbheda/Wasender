@@ -453,7 +453,7 @@ export default function ContactsPage() {
     setError("");
     try {
       const res = await fetch(
-        `/api/sheet-data?sheetName=${encodeURIComponent(selectedSheet)}`
+        `/api/sheet-data?sheetName=${encodeURIComponent(selectedSheet)}&t=${Date.now()}`
       );
       const data = await res.json();
 
