@@ -693,7 +693,18 @@ export default function CampaignsPage() {
 
   // Check if selected phones were recently messaged (7-day lookback)
   const checkRecentMessages = async (skipWarning = false) => {
-    if (!selectedAccountId || !selectedTemplate || selectedContacts.size === 0) return;
+    if (!selectedAccountId) {
+      setSendStatus({ type: 'error', message: '❌ Please select a WhatsApp account' });
+      return;
+    }
+    if (!selectedTemplate) {
+      setSendStatus({ type: 'error', message: '❌ Please select a message template' });
+      return;
+    }
+    if (selectedContacts.size === 0) {
+      setSendStatus({ type: 'error', message: '❌ Please select at least one contact' });
+      return;
+    }
     if (!campaignName.trim()) {
       setSendStatus({ type: 'error', message: '❌ Please enter a campaign name' });
       return;
@@ -2039,15 +2050,6 @@ export default function CampaignsPage() {
             </ul>
           </div>
 
-          {/* Send Status */}
-          {sendStatus && (
-            <div className={`p-4 rounded-lg font-medium ${
-              sendStatus.type === 'success' ? 'bg-green-100 text-green-800 border border-green-200' : 'bg-red-100 text-red-800 border border-red-200'
-            }`}>
-              {sendStatus.message}
-            </div>
-          )}
-
           {/* Buttons */}
           <div className="flex gap-4">
             <button
@@ -2058,12 +2060,21 @@ export default function CampaignsPage() {
             </button>
             <button
               onClick={handleSendCampaign}
-              disabled={sending || dedupChecking || !selectedAccountId || selectedContacts.size === 0}
+              disabled={sending || dedupChecking || !selectedAccountId || !selectedTemplate || selectedContacts.size === 0}
               className="flex-1 px-6 py-3 bg-green-600 hover:bg-green-700 disabled:bg-gray-400 text-white rounded-lg transition font-bold text-lg"
             >
               {dedupChecking ? '🔍 Checking recent messages...' : sending ? '⏳ Sending Campaign...' : `🚀 Send to ${dedupPhones.size} Unique Numbers`}
             </button>
           </div>
+
+          {/* Send Status — shown below button so it's always visible */}
+          {sendStatus && (
+            <div className={`p-4 rounded-lg font-medium ${
+              sendStatus.type === 'success' ? 'bg-green-100 text-green-800 border border-green-200' : 'bg-red-100 text-red-800 border border-red-200'
+            }`}>
+              {sendStatus.message}
+            </div>
+          )}
         </div>
 
         {/* Campaign History */}
