@@ -1940,6 +1940,61 @@ export default function CampaignsPage() {
         <div className="text-xs opacity-75 mt-1">Keep this tab open until complete</div>
       </div>
     )}
+    {/* Dedup Warning Modal — must be in step 4 where Send button lives */}
+    {dedupWarning && (
+      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+        <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6">
+          <div className="flex items-center gap-3 mb-4">
+            <span className="text-3xl">⚠️</span>
+            <h2 className="text-xl font-bold text-gray-900">Recent Messages Detected</h2>
+          </div>
+          <p className="text-gray-700 mb-2">
+            <span className="font-bold text-orange-600">{dedupWarning.count} number{dedupWarning.count !== 1 ? 's' : ''}</span> in your selection were already messaged in the last 7 days.
+          </p>
+          {dedupWarning.latestRun && (
+            <div className="bg-orange-50 border border-orange-200 rounded-lg px-4 py-3 mb-4">
+              <p className="text-sm text-orange-800 font-medium">
+                Most recent send: {new Date(dedupWarning.latestRun).toLocaleString()}
+              </p>
+            </div>
+          )}
+          <p className="text-gray-600 text-sm mb-6">
+            Sending again may feel repetitive to the recipient. Would you like to include them or skip them?
+          </p>
+          <div className="flex flex-col gap-3">
+            <button
+              onClick={() => { setDedupWarning(null); void submitCampaign(); }}
+              className="w-full py-3 bg-orange-500 hover:bg-orange-600 text-white rounded-xl font-bold transition"
+            >
+              Include all — send to everyone
+            </button>
+            <button
+              onClick={() => {
+                const recentSet = new Set(dedupWarning.recentPhones);
+                const toRemove = new Set<number>();
+                for (const c of filteredContacts) {
+                  const phones = [c.owner1_mobile, c.owner2_mobile, c.owner3_mobile]
+                    .map(p => (p || '').replace(/[^0-9]/g, ''));
+                  if (phones.some(p => p && recentSet.has(p))) toRemove.add(c.rowIndex);
+                }
+                setSelectedContacts(prev => new Set([...prev].filter(r => !toRemove.has(r))));
+                setDedupWarning(null);
+                setSendStatus({ type: 'success', message: `ℹ️ Removed ${toRemove.size} recently-contacted contact(s) from selection.` });
+              }}
+              className="w-full py-3 bg-green-600 hover:bg-green-700 text-white rounded-xl font-bold transition"
+            >
+              Skip the {dedupWarning.count} recent — send to the rest only
+            </button>
+            <button
+              onClick={() => setDedupWarning(null)}
+              className="w-full py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-xl font-semibold transition"
+            >
+              Cancel — go back
+            </button>
+          </div>
+        </div>
+      </div>
+    )}
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 p-4 sm:p-6">
       <div className="max-w-4xl mx-auto">
         <h1 className="text-3xl font-bold text-gray-900 mb-2">🚀 Campaign Manager</h1>
