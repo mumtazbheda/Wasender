@@ -54,16 +54,23 @@ function CampaignHistoryContent() {
   const [rerunStatus, setRerunStatus] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
   const [rerunDelayMin, setRerunDelayMin] = useState<string>('30');
   const [rerunDelayMax, setRerunDelayMax] = useState<string>('60');
+  const [rerunAccountId, setRerunAccountId] = useState<string>('');
+  const [accounts, setAccounts] = useState<any[]>([]);
   const [stoppingId, setStoppingId] = useState<number | null>(null);
   const browserProcessing = null; // cron job handles processing — no browser fallback needed
 
-  // Load all campaigns
+  // Load all campaigns and accounts
   useEffect(() => {
     const loadCampaigns = async () => {
       setLoading(true);
       try {
-        const res = await fetch('/api/send-campaign');
+        const [res, accRes] = await Promise.all([
+          fetch('/api/send-campaign'),
+          fetch('/api/accounts'),
+        ]);
         const data = await res.json();
+        const accData = await accRes.json();
+        if (accData.accounts) setAccounts(accData.accounts);
         if (data.campaigns) {
           setCampaigns(data.campaigns);
           // Auto-open detail if ID in URL
@@ -132,6 +139,11 @@ function CampaignHistoryContent() {
     const storedMax = parseInt(String(campaign.delay_between || 60));
     setRerunDelayMin(String(Math.max(5, isNaN(storedMin) ? 30 : storedMin)));
     setRerunDelayMax(String(Math.max(5, isNaN(storedMax) ? 60 : storedMax)));
+    // Pre-fill account — find matching account by name, fallback to first active
+    const match = accounts.find(a => a.name === campaign.account_name) ||
+                  accounts.find(a => a.status === 'active') ||
+                  accounts[0];
+    setRerunAccountId(match ? String(match.id) : '');
     setRerunModal(campaign);
   };
 
@@ -164,6 +176,7 @@ function CampaignHistoryContent() {
     setRerunLoading(true);
     setRerunStatus(null);
     try {
+      const selectedAccount = accounts.find(a => String(a.id) === rerunAccountId);
       const res = await fetch('/api/rerun-campaign', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -172,6 +185,8 @@ function CampaignHistoryContent() {
           mode,
           delayMin: parseInt(rerunDelayMin) || 30,
           delayMax: parseInt(rerunDelayMax) || 60,
+          accountId: rerunAccountId ? parseInt(rerunAccountId) : undefined,
+          accountName: selectedAccount?.name,
         }),
       });
       const data = await res.json();
@@ -239,6 +254,14 @@ function CampaignHistoryContent() {
                     className="px-4 py-2 bg-red-500 hover:bg-red-600 disabled:bg-red-300 text-white rounded-lg text-sm font-bold"
                   >
                     {stoppingId === selectedCampaign.id ? 'Stopping...' : '⏹ Stop'}
+                  </button>
+                )}
+                {(selectedCampaign.status === 'stopped' || selectedCampaign.status === 'partial' || selectedCampaign.status === 'failed') && (
+                  <button
+                    onClick={() => { handleRerun(selectedCampaign); }}
+                    className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg text-sm font-bold"
+                  >
+                    ▶ Resume
                   </button>
                 )}
                 <button
@@ -403,9 +426,9 @@ function CampaignHistoryContent() {
       {rerunModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4" onClick={() => !rerunLoading && setRerunModal(null)}>
           <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6" onClick={e => e.stopPropagation()}>
-            <h2 className="text-xl font-bold text-gray-900 mb-2">↺ Re-run Campaign</h2>
+            <h2 className="text-xl font-bold text-gray-900 mb-2">↺ Resume / Re-run Campaign</h2>
             <p className="text-gray-600 mb-1"><b>"{rerunModal.name || 'Unnamed Campaign'}"</b></p>
-            <p className="text-sm text-gray-500 mb-6">
+            <p className="text-sm text-gray-500 mb-4">
               {rerunModal.sent_count || 0} sent, {rerunModal.failed_count || 0} failed out of {rerunModal.total_unique_phones || rerunModal.total_contacts} total.
             </p>
             {rerunStatus && (
@@ -413,6 +436,24 @@ function CampaignHistoryContent() {
                 {rerunStatus.message}
               </div>
             )}
+            {/* Account selector */}
+            <div className="mb-4 bg-blue-50 rounded-xl p-4">
+              <p className="text-sm font-bold text-gray-700 mb-2">📱 Send From Account</p>
+              <select
+                value={rerunAccountId}
+                onChange={e => setRerunAccountId(e.target.value)}
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-400"
+              >
+                {accounts.map(a => (
+                  <option key={a.id} value={String(a.id)}>
+                    {a.name} ({a.phone || 'No phone'}) — {a.status}
+                  </option>
+                ))}
+              </select>
+              {rerunModal.account_name && accounts.find(a => String(a.id) === rerunAccountId)?.name !== rerunModal.account_name && (
+                <p className="text-xs text-orange-600 mt-1">⚠️ Changing account from <b>{rerunModal.account_name}</b></p>
+              )}
+            </div>
             {/* Delay inputs */}
             <div className="mb-5 bg-gray-50 rounded-xl p-4">
               <p className="text-sm font-bold text-gray-700 mb-3">⏱ Delay Between Messages (seconds)</p>
@@ -438,10 +479,10 @@ function CampaignHistoryContent() {
               </div>
               <p className="text-xs text-gray-400 mt-2">WaSender requires at least 5s between messages</p>
             </div>
-          <div className="flex flex-col gap-3">
+            <div className="flex flex-col gap-3">
               <button disabled={rerunLoading} onClick={() => executeRerun('resume')} className="w-full py-3 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-300 text-white rounded-xl font-bold text-left px-4 transition">
                 <div className="font-bold">▶ Resume from where I left off</div>
-                <div className="text-sm font-normal opacity-90">Skip already-sent numbers, only send to remaining ones</div>
+                <div className="text-sm font-normal opacity-90">Skip already-sent numbers, only send to remaining queued ones</div>
               </button>
               <button disabled={rerunLoading} onClick={() => executeRerun('fresh')} className="w-full py-3 bg-orange-500 hover:bg-orange-600 disabled:bg-orange-300 text-white rounded-xl font-bold text-left px-4 transition">
                 <div className="font-bold">↺ Start completely fresh</div>
@@ -563,11 +604,11 @@ function CampaignHistoryContent() {
     {rerunModal && (
       <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4" onClick={() => !rerunLoading && setRerunModal(null)}>
         <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6" onClick={e => e.stopPropagation()}>
-          <h2 className="text-xl font-bold text-gray-900 mb-2">↺ Re-run Campaign</h2>
+          <h2 className="text-xl font-bold text-gray-900 mb-2">↺ Resume / Re-run Campaign</h2>
           <p className="text-gray-600 mb-1">
             <b>"{rerunModal.name || 'Unnamed Campaign'}"</b>
           </p>
-          <p className="text-sm text-gray-500 mb-6">
+          <p className="text-sm text-gray-500 mb-4">
             {rerunModal.sent_count || 0} sent, {rerunModal.failed_count || 0} failed out of {rerunModal.total_unique_phones || rerunModal.total_contacts} total.
           </p>
 
@@ -576,6 +617,25 @@ function CampaignHistoryContent() {
               {rerunStatus.message}
             </div>
           )}
+
+          {/* Account selector */}
+          <div className="mb-4 bg-blue-50 rounded-xl p-4">
+            <p className="text-sm font-bold text-gray-700 mb-2">📱 Send From Account</p>
+            <select
+              value={rerunAccountId}
+              onChange={e => setRerunAccountId(e.target.value)}
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-400"
+            >
+              {accounts.map(a => (
+                <option key={a.id} value={String(a.id)}>
+                  {a.name} ({a.phone || 'No phone'}) — {a.status}
+                </option>
+              ))}
+            </select>
+            {rerunModal.account_name && accounts.find(a => String(a.id) === rerunAccountId)?.name !== rerunModal.account_name && (
+              <p className="text-xs text-orange-600 mt-1">⚠️ Changing account from <b>{rerunModal.account_name}</b></p>
+            )}
+          </div>
 
           {/* Delay inputs */}
           <div className="mb-5 bg-gray-50 rounded-xl p-4">
@@ -610,7 +670,7 @@ function CampaignHistoryContent() {
               className="w-full py-3 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-300 text-white rounded-xl font-bold text-left px-4 transition"
             >
               <div className="font-bold">▶ Resume from where I left off</div>
-              <div className="text-sm font-normal opacity-90">Skip already-sent numbers, only send to remaining ones</div>
+              <div className="text-sm font-normal opacity-90">Skip already-sent numbers, only send to remaining queued ones</div>
             </button>
             <button
               disabled={rerunLoading}

@@ -3,7 +3,7 @@ import { sql } from '@/lib/db';
 
 export async function POST(request: NextRequest) {
   try {
-    const { campaignId, mode, delayMin, delayMax, batchSize, batchWaitMinutes } = await request.json();
+    const { campaignId, mode, delayMin, delayMax, batchSize, batchWaitMinutes, accountId, accountName } = await request.json();
 
     if (!campaignId || !mode) {
       return NextResponse.json({ message: 'campaignId and mode are required' }, { status: 400 });
@@ -31,20 +31,42 @@ export async function POST(request: NextRequest) {
     const newBatchSize = batchSize != null ? Math.max(0, parseInt(String(batchSize))) : parseInt(String(campaign.batch_size || 0));
     const newBatchWait = batchWaitMinutes != null ? Math.max(0, parseInt(String(batchWaitMinutes))) : parseInt(String(campaign.batch_wait_minutes || 0));
 
-    // Update campaign: reset status and save new delays + batch settings
-    await sql`
-      UPDATE campaign_runs
-      SET status = 'in_progress',
-          completed_at = NULL,
-          sent_count = 0,
-          failed_count = 0,
-          delay_min = ${newDelayMin},
-          delay_between = ${newDelayMax},
-          batch_size = ${newBatchSize},
-          batch_wait_minutes = ${newBatchWait},
-          started_at = CASE WHEN ${mode} = 'fresh' THEN NOW() ELSE started_at END
-      WHERE id = ${cid}
-    `;
+    // Resolve new account values
+    const newAccountId = accountId != null ? parseInt(String(accountId)) : null;
+    const newAccountName = accountName || null;
+
+    // Update campaign: reset status, save new delays, account, batch settings
+    if (newAccountId) {
+      await sql`
+        UPDATE campaign_runs
+        SET status = 'in_progress',
+            completed_at = NULL,
+            sent_count = 0,
+            failed_count = 0,
+            delay_min = ${newDelayMin},
+            delay_between = ${newDelayMax},
+            batch_size = ${newBatchSize},
+            batch_wait_minutes = ${newBatchWait},
+            account_id = ${newAccountId},
+            account_name = ${newAccountName},
+            started_at = CASE WHEN ${mode} = 'fresh' THEN NOW() ELSE started_at END
+        WHERE id = ${cid}
+      `;
+    } else {
+      await sql`
+        UPDATE campaign_runs
+        SET status = 'in_progress',
+            completed_at = NULL,
+            sent_count = 0,
+            failed_count = 0,
+            delay_min = ${newDelayMin},
+            delay_between = ${newDelayMax},
+            batch_size = ${newBatchSize},
+            batch_wait_minutes = ${newBatchWait},
+            started_at = CASE WHEN ${mode} = 'fresh' THEN NOW() ELSE started_at END
+        WHERE id = ${cid}
+      `;
+    }
 
     return NextResponse.json({
       message: `Campaign ${mode === 'fresh' ? 'restarted from beginning' : 'resumed'}. Cron job will process it automatically.`,
