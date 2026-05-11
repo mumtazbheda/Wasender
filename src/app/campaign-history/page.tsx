@@ -52,6 +52,8 @@ function CampaignHistoryContent() {
   const [rerunModal, setRerunModal] = useState<Campaign | null>(null);
   const [rerunLoading, setRerunLoading] = useState(false);
   const [rerunStatus, setRerunStatus] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+  const [backfillLoading, setBackfillLoading] = useState(false);
+  const [backfillStatus, setBackfillStatus] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
   const [rerunDelayMin, setRerunDelayMin] = useState<string>('30');
   const [rerunDelayMax, setRerunDelayMax] = useState<string>('60');
   const [rerunAccountId, setRerunAccountId] = useState<string>('');
@@ -130,6 +132,27 @@ function CampaignHistoryContent() {
       stopped: '⏹ Stopped',
     };
     return labels[status] || status;
+  };
+
+  const handleBackfillFeedback = async (campaign: Campaign) => {
+    setBackfillStatus(null);
+    setBackfillLoading(true);
+    try {
+      const res = await fetch('/api/backfill-feedback', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ campaignId: campaign.id }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setBackfillStatus({ type: 'success', message: `✅ ${data.message}` });
+      } else {
+        setBackfillStatus({ type: 'error', message: `❌ ${data.message}` });
+      }
+    } catch (e: any) {
+      setBackfillStatus({ type: 'error', message: `❌ Failed: ${e.message}` });
+    }
+    setBackfillLoading(false);
   };
 
   const handleRerun = (campaign: Campaign) => {
@@ -270,8 +293,22 @@ function CampaignHistoryContent() {
                 >
                   🔄 Re-run
                 </button>
+                <button
+                  onClick={() => handleBackfillFeedback(selectedCampaign)}
+                  disabled={backfillLoading}
+                  className="px-4 py-2 bg-purple-600 hover:bg-purple-700 disabled:bg-purple-300 text-white rounded-lg text-sm font-bold"
+                  title="Write 'Message Sent' to the Google Sheet feedback column for all sent messages in this campaign"
+                >
+                  {backfillLoading ? '⏳ Updating...' : '📝 Update Sheet Feedback'}
+                </button>
               </div>
             </div>
+
+            {backfillStatus && (
+              <div className={`mt-3 p-3 rounded-lg text-sm font-medium ${backfillStatus.type === 'success' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
+                {backfillStatus.message}
+              </div>
+            )}
 
             {/* Stats Grid */}
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mt-6">

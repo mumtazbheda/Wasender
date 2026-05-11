@@ -74,9 +74,41 @@ async function writeFeedbackToSheet(
 ): Promise<void> {
   try {
     const headers = await getSheetHeadersWithAuth(accessToken, sheetTab);
-    const feedbackCols = getFeedbackColumnIndices(headers, accountName);
-    const colIndex = feedbackCols[ownerNum];
-    if (colIndex === undefined || colIndex < 0) return;
+
+    // Determine which standard field we need for this account + owner slot
+    const name = accountName.toLowerCase();
+    let targetField: string;
+    if (name.includes('ahmed')) {
+      targetField = ownerNum === 1 ? 'ahmed_feedback_1' : ownerNum === 2 ? 'ahmed_feedback_2' : 'ahmed_feedback_3';
+    } else if (name.includes('zoha')) {
+      targetField = ownerNum === 1 ? 'zoha_feedback_1' : ownerNum === 2 ? 'zoha_feedback_2' : 'zoha_feedback_3';
+    } else if (name.includes('asma')) {
+      targetField = ownerNum === 1 ? 'asma_feedback_1' : ownerNum === 2 ? 'asma_feedback_2' : 'asma_feedback_3';
+    } else {
+      return; // Unknown account — don't know which column to write
+    }
+
+    // Step 1: try column_mappings DB — this handles sheets with custom/non-standard header names
+    let colIndex = -1;
+    try {
+      const mappingsRes = await sql`
+        SELECT source_header FROM column_mappings
+        WHERE sheet_tab = ${sheetTab} AND standard_field = ${targetField}
+        LIMIT 1
+      `;
+      if (mappingsRes.rows.length > 0) {
+        const sourceHeader = mappingsRes.rows[0].source_header;
+        colIndex = headers.findIndex(h => h.toLowerCase().trim() === sourceHeader.toLowerCase().trim());
+      }
+    } catch { /* ignore — fall back to direct search */ }
+
+    // Step 2: fall back to direct header substring search (for sheets with standard names)
+    if (colIndex < 0) {
+      const feedbackCols = getFeedbackColumnIndices(headers, accountName);
+      colIndex = feedbackCols[ownerNum] ?? -1;
+    }
+
+    if (colIndex < 0) return;
     const timestamp = new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
     await updateSheetCell(accessToken, sheetTab, rowIndex, colIndex, `Message Sent - ${timestamp}`);
   } catch { /* non-fatal */ }
