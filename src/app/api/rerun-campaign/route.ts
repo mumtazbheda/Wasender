@@ -1,6 +1,39 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { sql } from '@/lib/db';
 
+async function triggerGithubWorkflow(campaignId: number, delayMin: number, delayMax: number): Promise<{ ok: boolean; error?: string }> {
+  const githubPat = process.env.GITHUB_PAT;
+  if (!githubPat) return { ok: false, error: 'GITHUB_PAT env var not set' };
+
+  try {
+    const res = await fetch(
+      'https://api.github.com/repos/mumtazbheda/Wasender/actions/workflows/process-campaign.yml/dispatches',
+      {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${githubPat}`,
+          'Accept': 'application/vnd.github+json',
+          'Content-Type': 'application/json',
+          'X-GitHub-Api-Version': '2022-11-28',
+        },
+        body: JSON.stringify({
+          ref: 'main',
+          inputs: {
+            campaign_id: String(campaignId),
+            delay_min: String(delayMin),
+            delay_max: String(delayMax),
+          },
+        }),
+      }
+    );
+    if (res.ok || res.status === 204) return { ok: true };
+    const errText = await res.text();
+    return { ok: false, error: `GitHub ${res.status}: ${errText}` };
+  } catch (err: any) {
+    return { ok: false, error: err.message };
+  }
+}
+
 export async function POST(request: NextRequest) {
   try {
     const { campaignId, mode, delayMin, delayMax, batchSize, batchWaitMinutes, accountId, accountName } = await request.json();
@@ -68,9 +101,15 @@ export async function POST(request: NextRequest) {
       `;
     }
 
+    // Trigger GitHub Actions workflow — this is what actually sends the messages
+    const { ok: workflowTriggered, error: workflowError } = await triggerGithubWorkflow(cid, newDelayMin, newDelayMax);
+
     return NextResponse.json({
-      message: `Campaign ${mode === 'fresh' ? 'restarted from beginning' : 'resumed'}. Cron job will process it automatically.`,
-      workflowTriggered: true,
+      message: workflowTriggered
+        ? `Campaign ${mode === 'fresh' ? 'restarted' : 'resumed'} and background job started`
+        : `Campaign ${mode === 'fresh' ? 'restarted' : 'resumed'} but workflow trigger failed: ${workflowError}`,
+      workflowTriggered,
+      workflowError: workflowError || null,
       delayMin: newDelayMin,
       delayMax: newDelayMax,
       batchSize: newBatchSize,
